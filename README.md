@@ -59,7 +59,7 @@ whatever directory you launch it from.
 ```
 make test       # 22 scripted headless playthroughs, checked frame by frame
 make maps       # reachability audit of the generated maps
-make tour       # walkthrough -> docs/TOUR.md (real dumped frames)
+make tour       # walkthrough -> docs/TOUR.md (20 real dumped frames)
 make art        # re-convert art_src/*.png -> src/art.s and rebuild
 make screens    # docs/shots/*.png -> docs/screens.html
 ```
@@ -162,6 +162,9 @@ python3 tools/dumpframe.py /tmp/frames.txt        # every dumped frame
 * `--fixed-rng`, `--seed N` — deterministic battles for the tests.
 * `--level N` — put the starter at level N (for testing late-game paths).
 * `--trace` — dump the debug markers to stderr (crash bisection aid).
+
+`make tour` captures the walkthrough the same way: 20 screens from title to
+the lake, the cave, RED's house and an evolution, written to `docs/TOUR.md`.
 
 `make test` runs 22 scenarios (title, intro, walking, grass encounters,
 menus, party, bag, dex, save, load, wild battle, win, run, catch, Pokémon

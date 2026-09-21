@@ -37,15 +37,17 @@ def frames(path, every=False):
     return out
 
 
-def run(name, script, quick=True, level=None, keep=None, frames_wanted=None):
+def run(name, script, quick=True, level=None, xp=None, keep=None,
+        frames_wanted=None):
     os.makedirs(TMP, exist_ok=True)
     dump = os.path.join(TMP, name + ".txt")
     args = [BIN, "--headless", "--fast", "--fixed-rng"]
     if quick:
         args.append("--quickstart")
-        args += ["--level", str(level)] if level else []
-    elif level:
+    if level:
         args += ["--level", str(level)]
+    if xp:
+        args += ["--xp", str(xp)]
     args += ["--script", script, "--dump", dump]
     subprocess.call(args, cwd=ROOT, stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL, timeout=600)
@@ -128,6 +130,33 @@ def main():
              + play.dump() + "q")
     parts.append(block("POKeMON CENTER", fs[-1][0], fs[-1][1],
                        "The nurse heals the whole party."))
+
+    # -- the new ground: the lake, the cave, the house ----------------------
+    fs = run("route2", play.scenario("shot_route2") + "q")
+    parts.append(block("ROUTE 2, the lake", fs[-1][0], fs[-1][1],
+                       "East out of ROUTE 1: sand, a pier you can walk out on, "
+                       "a fenced look-out, flower beds, and the boulder ridge "
+                       "along the east with GRANITE CAVE under it."))
+    fs = run("lake", play.scenario("lake") + "q")
+    parts.append(block("Something in the water", fs[-1][0], fs[-1][1],
+                       "The lake is surfable ground. Step onto a wave and the "
+                       "water encounter table answers -- the tile you stand on "
+                       "picks the table, the way the real games do it."))
+    fs = run("cave", play.scenario("cave") + "q")
+    parts.append(block("GRANITE CAVE", fs[0][0], fs[0][1],
+                       "Boulders for walls, stone for a floor, a sandy patch, a "
+                       "chest, and a hiker's camp (PC, shelf, bedroll, rug) in "
+                       "the middle of the room."))
+    parts.append(block("... and what lives on the stone", fs[-1][0], fs[-1][1]))
+    fs = run("house", play.scenario("house") + "q")
+    parts.append(block("RED's HOUSE", fs[-1][0], fs[-1][1],
+                       "The interior tileset: wall, floor, bookshelf, TV, bed "
+                       "and rug, with MOM inside."))
+    fs = run("evolve", play.scenario("evolve") + "q", level=15, xp=590)
+    parts.append(block("Evolution", fs[-1][0], fs[-1][1],
+                       "A POKeMON that reaches the level in its species record "
+                       "changes form -- level, EXP and moves carry over, and "
+                       "the stats and sprite follow the new species."))
 
     # -- save ---------------------------------------------------------------
     fs = run("save", play.wait(10) + play.tap("s") + play.step("d", 4)

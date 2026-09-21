@@ -33,6 +33,8 @@ SECTIONS = [
     ("The world", [
         ("pallet.png", "PALLET TOWN: houses, the cross street, the ponds and the "
                        "tall grass on the west side."),
+        ("route1.png", "ROUTE 1 at the edge of the tall grass -- the first wild "
+                       "ground in the game, and where the encounter table lives."),
         ("route2.png", "ROUTE 2, the lake route: sand, a pier out over the water, "
                        "a fenced look-out and the ridge with GRANITE CAVE."),
         ("cave.png", "Inside GRANITE CAVE: boulders for walls, stone floor for the "
@@ -54,6 +56,10 @@ SECTIONS = [
                               "tiles are cut from."),
         ("src_tiles_in.png", "art_src/tiles_in.png -- the indoor sheet: furniture "
                              "and room blocks."),
+        ("src_tiles_bld.png", "art_src/tiles_bld.png -- the buildings-and-objects "
+                              "sheet: roofs, walls, doors."),
+        ("src_frame.png", "art_src/frame.png -- the dialogue frame, cut into the "
+                          "border and inner pieces the boxes draw."),
         ("bg_field.png", "art_src/bg_field.png, dimmed, becomes the battle "
                          "backdrop."),
     ]),

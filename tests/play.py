@@ -73,7 +73,8 @@ def starter_to_world():
 
 QUICK = ("ow", "walk", "grass", "menu", "battle", "save", "win", "run",
          "catch", "center", "heal", "party", "bag", "dex", "rival", "evolve",
-         "lake", "cave", "house", "shot_route2", "shot_cave", "shot_house", "shot_center")
+         "lake", "cave", "house", "shot_route1", "shot_route2", "shot_cave",
+         "shot_house", "shot_center")
 
 
 def new_game(name):
@@ -265,6 +266,10 @@ def scenario(name):
         # which is what turns the player to face her
         s += step("u", 1) + step("l", 3) + tap("a") + wait(260) + dump()
     # three walks that only exist to take a picture of a place
+    elif name == "shot_route1":
+        # ROUTE 1 at the edge of the tall grass: one tile short of it, so the
+        # picture is the route rather than the encounter it would roll
+        s += new_game(name) + step("u", 22) + step("l", 5) + wait(30) + dump()
     elif name == "shot_route2":
         # the lake, the pier, the fence and the beach in one frame
         s += new_game(name) + walk_to_route2()
