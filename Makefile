@@ -1,6 +1,10 @@
 # ============================================================================
 #  POKeMON ASM EDITION - x86-64 Linux, raw syscalls, no libc, no engine.
 #  Only needs: GNU as, GNU ld, GNU make (+ python3 to regenerate data.s).
+#  make test   : 22 scripted headless playthroughs
+#  make maps   : reachability audit of the generated maps
+#  make tour   : docs/TOUR.md   -- real frames from a real playthrough
+#  make art    : regenerate src/art.s (needs python3 + Pillow)
 # ============================================================================
 AS      := as
 LD      := ld
@@ -45,6 +49,16 @@ demo: pokemon
 tour: pokemon
 	python3 tools/tour.py
 
+# reachability audit of the generated maps: every warp, sign, item, npc and
+# encounter ground has to be walkable from the spawn, and every tile the art
+# ships has to be placed by some map
+maps:
+	python3 tools/check_maps.py
+
+# docs/shots/*.png -> docs/screens.html
+screens:
+	python3 tools/make_screens.py
+
 clean:
 	rm -rf build pokemon src/data.s
 
@@ -52,4 +66,4 @@ size: pokemon
 	@size pokemon
 	@nm pokemon | sort | tail -20
 
-.PHONY: all test demo tour art clean size
+.PHONY: all test demo tour art maps screens clean size

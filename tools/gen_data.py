@@ -218,7 +218,7 @@ def build_pallet():
     put(m, 21, 2, "$")                         # town sign by the north gate
     put(m, 14, 9, "$")                         # house sign
     put(m, 17, 10, "N")                        # PROF. OAK
-    put(m, 11, 9, "N")                         # MOM
+
     put(m, 24, 16, "N")                        # KID
     put(m, 19, 10, "P")                        # spawn
     return m
@@ -233,6 +233,7 @@ def build_route1():
     rect(m, 39, 0, 39, 39, "#")
     rect(m, 18, 0, 21, 0, ".")                 # north gate -> VIRIDIAN
     rect(m, 18, 39, 21, 39, ".")               # south gate -> PALLET
+    rect(m, 39, 20, 39, 21, ".")               # east gate -> ROUTE 2 (the lake)
     rect(m, 19, 1, 20, 38, ":")                # the route itself
     rect(m, 8, 20, 31, 21, ":")                # jog in the middle
     rect(m, 3, 6, 10, 12, ",")
@@ -290,7 +291,6 @@ def build_center():
     put(m, 3, 1, "M")
     rect(m, 5, 8, 6, 8, "D")                   # door back outside
     put(m, 3, 4, "N")                          # NURSE
-    put(m, 8, 4, "N")                          # MOM
     put(m, 5, 7, "P")                          # arrival tile
     return m
 
@@ -300,25 +300,128 @@ ROUTE1 = rows_of(build_route1())
 VIRIDIAN = rows_of(build_viridian())
 CENTER = rows_of(build_center())
 
-INDOOR_MAPS = {"POKeMON CENTER"}
+# ------------------------------------------------------------ ROUTE 2 -------
+# The lake route east of ROUTE 1: a sand shore, a pier out over the water, a
+# fenced look-out, and the GRANITE CAVE mouth in the rocky ridge to the north.
+# Water is surfable, so the player walks out onto it and MAGIKARP shows up.
+def build_route2():
+    m = M(40, 28)
+    rect(m, 0, 0, 39, 0, "#")
+    rect(m, 0, 27, 39, 27, "#")
+    rect(m, 0, 0, 0, 27, "#")
+    rect(m, 39, 0, 39, 27, "#")
+    rect(m, 0, 20, 0, 21, ".")                  # west gate -> ROUTE 1
+    rect(m, 1, 20, 13, 21, ":")                 # road in from the west
+    rect(m, 12, 3, 13, 20, ":")                 # north along the shore
+    rect(m, 6, 3, 12, 3, ":")                   # ... to the cave mouth
+    rect(m, 1, 1, 5, 1, "b")                    # the ridge
+    rect(m, 7, 1, 11, 1, "b")
+    rect(m, 1, 2, 1, 7, "b")
+    rect(m, 2, 5, 5, 7, "r")                    # scree under the ridge
+    put(m, 6, 1, "D")                           # GRANITE CAVE
+    rect(m, 16, 6, 38, 25, "s")                 # the beach
+    rect(m, 19, 9, 36, 23, "~")                 # the lake
+    rect(m, 27, 7, 27, 13, ":")                 # a pier out over the water
+    rect(m, 16, 6, 16, 12, "f")                 # fence round the look-out
+    rect(m, 16, 12, 20, 12, "f")
+    rect(m, 2, 12, 7, 17, "f")                  # a fenced flower bed
+    for (x, y) in [(3, 14), (3, 16), (5, 14), (5, 16)]:
+        put(m, x, y, "F")
+    rect(m, 2, 22, 11, 25, ",")                 # tall grass below the road
+    rect(m, 24, 3, 35, 5, ",")                  # and above the beach
+    put(m, 36, 24, "x")                         # a chest half-buried in sand
+    put(m, 18, 7, "*")                          # POKe BALL on the sand
+    put(m, 1, 19, "$")                          # route sign
+    put(m, 7, 2, "$")                           # cave sign
+    put(m, 17, 8, "$")                          # lake sign
+    put(m, 21, 25, "N")                         # FISHER
+    put(m, 34, 8, "N")                          # LASS
+    put(m, 10, 4, "N")                          # HIKER, on the road
+    return m
+
+
+# --------------------------------------------------------- GRANITE CAVE -----
+# An indoor room: the rock floor holds GEODUDE, boulders are the walls, and a
+# hiker has made a camp in the corner (PC, shelf, bedroll, rug, chest).
+def build_cave():
+    m = M(16, 12, "r")
+    rect(m, 0, 0, 15, 0, "b")
+    rect(m, 0, 11, 15, 11, "b")
+    rect(m, 0, 0, 0, 11, "b")
+    rect(m, 15, 0, 15, 11, "b")
+    put(m, 4, 11, "D")                          # back out to ROUTE 2
+    rect(m, 7, 3, 9, 4, "b")                    # boulder cluster
+    rect(m, 11, 2, 13, 3, "b")
+    rect(m, 6, 8, 10, 8, "s")                   # a sandy patch on the floor
+    put(m, 13, 7, "x")                          # a chest in the dark
+    put(m, 7, 9, "g")                           # the camp's rug
+    put(m, 1, 2, "p")                           # PC terminal
+    put(m, 2, 2, "k")                           # shelf
+    put(m, 1, 9, "E")                           # bedroll
+    put(m, 7, 6, "N")                           # HIKER
+    put(m, 4, 10, "P")                          # arrival tile, by the door
+    return m
+
+
+# ---------------------------------------------------------- RED's HOUSE -----
+# The player's own house in PALLET TOWN: PC, bookshelf, TV, bed, rug and the
+# kitchen table -- the interior set's furniture, on an indoor map.
+def build_house():
+    m = M(12, 9, "L")
+    rect(m, 0, 0, 11, 0, "W")
+    rect(m, 0, 8, 11, 8, "W")
+    rect(m, 0, 0, 0, 8, "W")
+    rect(m, 11, 0, 11, 8, "W")
+    rect(m, 5, 8, 6, 8, "D")                    # back out to PALLET TOWN
+    put(m, 1, 1, "p")                           # PC
+    rect(m, 2, 1, 3, 1, "k")                    # bookshelf
+    rect(m, 9, 1, 10, 1, "M")                   # TV
+    rect(m, 8, 4, 9, 6, "E")                    # bed
+    rect(m, 3, 4, 5, 5, "g")                    # rug
+    rect(m, 1, 5, 2, 5, "C")                    # table
+    put(m, 3, 6, "N")                           # MOM
+    put(m, 6, 7, "P")                           # arrival tile
+    return m
+
+
+ROUTE2 = rows_of(build_route2())
+CAVE = rows_of(build_cave())
+HOUSE = rows_of(build_house())
+
+# indoor maps draw with the interior tileset (map_tilesets in src/data.s).
+# The cave is *not* one of them: its rock and boulders come off the outdoor
+# sheet, so it keeps the outdoor set and the room art stays for rooms.
+INDOOR_MAPS = {"POKeMON CENTER", "RED's HOUSE"}
+
+# What lives in a *tile*, the way the real games do it: a tile's encounter
+# group (tile_defs +37) picks the table, so the same tall grass on any map
+# holds the same crowd, the water holds MAGIKARP, and the cave holds GEODUDE.
+ENCOUNTERS = [
+    (),              # 0: nothing -- grass, sand, road: safe ground
+    (3, 4, 4, 5, 6, 7),   # 1 tall grass: PIDGEY RATTATA ODDISH MEOWTH PIKACHU
+    (8, 8, 8),       # 2 water:      MAGIKARP, if you dare walk out on it
+    (9, 9, 9, 5),    # 3 cave floor: GEODUDE, and one ODDISH that got lost
+]
+# level band per group, low then high
+LEVELS = [(0, 0), (3, 6), (5, 12), (6, 14)]
 
 MAPS = [
     dict(name="PALLET TOWN", rows=PALLET,
          npcs=[(17, 10, 0, 5, "PROF. OAK\fPOKeMON are my\ntrue love!\fWild ones live in\nthe tall grass.\fPress M for the\nmenu, Z to talk."),
-               (11, 9, 0, 2, "MOM\fAll boys leave\nhome some day.\fIt said so on TV!"),
                (24, 16, 0, 1, "KID\fTall grass hides\nwild POKeMON.\fWalk in it and\nwatch out!")],
          signs=[(21, 2, "PALLET TOWN\fShades of your\njourney await!"),
                 (14, 9, "RED's house\fMOM lives here.")],
          items=[(8, 13, "POTION", "\fYou found a\nPOTION!\fIt went into\nyour BAG.")],
          links=dict(N=(1, KEEPX, 38)),
-         warps=[(10, 7, 3, 5, 7), (30, 7, 3, 6, 7)]),
+         warps=[(10, 7, 6, 6, 7), (30, 7, 3, 6, 7)]),
 
     dict(name="ROUTE 1", rows=ROUTE1,
          npcs=[(22, 20, 0, 1, "YOUNGSTER JOEY\fI like shorts!\nThey're comfy\nand easy to wear!\f...My RATTATA is\nin the top\npercentage!"),
                (16, 28, 0, 2, "BUG CATCHER\fTall grass rustles\nwhen you walk\nthrough it.\fSomething always\njumps out!")],
          signs=[(18, 34, "ROUTE 1\fPALLET TOWN -\nVIRIDIAN CITY")],
          items=[(34, 4, "POKe BALL", "\fYou found a\nPOKe BALL!\fIt went into\nyour BAG.")],
-         links=dict(N=(2, KEEPX, 30), S=(0, KEEPX, 2)),
+         links=dict(N=(2, KEEPX, 30), S=(0, KEEPX, 2),
+                    E=(4, 1, KEEPY)),
          warps=[]),
 
     dict(name="VIRIDIAN CITY", rows=VIRIDIAN,
@@ -332,8 +435,32 @@ MAPS = [
 
     dict(name="POKeMON CENTER", rows=CENTER, floor="L",
          npcs=[(3, 4, 1, 3, "NURSE\fWelcome to the\nPOKeMON CENTER!\fShall I heal\nyour POKeMON?"),
-               (8, 4, 0, 2, "MOM\fTake care out\nthere, RED!")],
+               ],
          signs=[], items=[], links=dict(),
+         warps=[(5, 8, 0xFE, 0, 0), (6, 8, 0xFE, 0, 0)]),
+
+    dict(name="ROUTE 2", rows=ROUTE2,
+         npcs=[(21, 25, 0, 1, "FISHER\fMAGIKARP live in\nthe lake.\fHopeless things,\nnormally.\fBut you can walk\nright out onto the\nwater and find\nout for yourself!"),
+               (34, 8, 0, 2, "LASS\fThis sand is warm.\fNothing ever\njumps out of it.\fThe water, mind\nyou, is another\nstory."),
+               (10, 4, 0, 5, "HIKER\fGRANITE CAVE is\nbehind me.\fGEODUDE sleep on\nthe cave floor --\nstep on it and one\nwakes up angry!")],
+         signs=[(1, 19, "ROUTE 2\fWEST: ROUTE 1\fEAST: THE LAKE"),
+                (7, 2, "GRANITE CAVE\fA hiker's camp\nis just inside."),
+                (17, 8, "THE LAKE\fDEEP AND COLD"),
+                (36, 24, "A CHEST\fHalf-buried in\nthe sand.\fThe lock is rusty\nand shut.")],
+         items=[(18, 7, "POKe BALL", "\fYou found a\nPOKe BALL!\fIt went into\nyour BAG.")],
+         links=dict(W=(1, 38, KEEPY)),
+         warps=[(6, 1, 5, 4, 10)]),
+
+    dict(name="GRANITE CAVE", rows=CAVE, floor="r",
+         npcs=[(7, 6, 0, 1, "HIKER\fThis is my camp.\fI dig down here\nfor GEODUDE.\fCareful where you\nstep -- the whole\nfloor is theirs!")],
+         signs=[(13, 7, "A CHEST\fFull of POKe BALLs\nthat belong to\nthe hiker.\fBetter leave it\nalone.")],
+         items=[], links=dict(),
+         warps=[(4, 11, 4, 6, 2)]),
+
+    dict(name="RED's HOUSE", rows=HOUSE, floor="L",
+         npcs=[(3, 6, 0, 2, "MOM\fAll boys leave\nhome some day.\fIt said so on TV!\fTake care of that\nPOKeMON of yours!")],
+         signs=[(9, 1, "A movie is on\nTV: two POKeMON\nin a battle!")],
+         items=[], links=dict(),
          warps=[(5, 8, 0xFE, 0, 0), (6, 8, 0xFE, 0, 0)]),
 ]
 
@@ -465,7 +592,7 @@ TILES = [
     ("tree",    "#", "####", [A(C_GREEN, C_BGREEN)] * 4, 0, 0),
     ("wall",    "W", "####", [A(C_GRAY, C_BWHITE)] * 4, 0, 0),
     ("floor",   "L", ".  .", [A(C_BLACK, C_GRAY)] * 4, 1, 0),
-    ("water",   "~", "~~~~", [A(C_BLUE, C_BCYAN)] * 4, 0, 0),
+    ("water",   "~", "~~~~", [A(C_BLUE, C_BCYAN)] * 4, 1, 2),   # surfable
     ("roof",    "R", "__||", [A(C_RED, C_BRED)] * 4, 0, 0),
     ("door",    "D", "[]||", [A(C_GRAY, C_BWHITE)] * 4, 1, 0),
     ("counter", "C", "====", [A(C_YELLOW, C_BYELLOW)] * 4, 0, 0),
@@ -474,6 +601,15 @@ TILES = [
     ("flower",  "F", "*  *", [A(C_GREEN, C_BMAGENTA)] * 4, 1, 0),
     ("path",    ":", "    ", [A(C_YELLOW, C_BYELLOW)] * 4, 1, 0),
     ("machine", "M", "####", [A(C_RED, C_BWHITE)] * 4, 0, 0),
+    ("sand",    "s", "....", [A(C_YELLOW, C_BYELLOW)] * 4, 1, 0),
+    ("rock",    "r", "    ", [A(C_GRAY, C_BWHITE)] * 4, 1, 3),
+    ("boulder", "b", "####", [A(C_GRAY, C_BWHITE)] * 4, 0, 0),
+    ("fence",   "f", "||||", [A(C_GRAY, C_BWHITE)] * 4, 0, 0),
+    ("chest",   "x", "####", [A(C_YELLOW, C_BYELLOW)] * 4, 0, 0),
+    ("pc",      "p", "####", [A(C_GRAY, C_BCYAN)] * 4, 0, 0),
+    ("shelf",   "k", "####", [A(C_YELLOW, C_YELLOW)] * 4, 0, 0),
+    ("bed",     "E", "####", [A(C_GRAY, C_BCYAN)] * 4, 0, 0),
+    ("rug",     "g", "    ", [A(C_MAGENTA, C_BMAGENTA)] * 4, 1, 0),
     ("out",     "", "    ", [A(C_BLACK, C_BLACK)] * 4, 0, 0),
 ]
 CHAR2TILE = {t[1]: i for i, t in enumerate(TILES) if t[1]}
@@ -569,8 +705,13 @@ def emit_entities(label, ents, kind):
         else:
             x, y, k, spr, txt = e
             w("    .byte %d,%d,%d,%d" % (x, y, k, spr))
+        # a record is 16 bytes: 4 coordinate bytes, 4 of padding, then the
+        # text pointer -- world.s reads that pointer at +8, so the padding
+        # comes first.  (It used to sit after the quad, which moved the
+        # pointer to +4 and turned every NPC, sign and item line into
+        # "?? MESSAGE ERROR ??".)
+        w("    .zero 4                      # padding: the pointer lives at +8")
         w("    .quad str_%s_%s_%d_%d" % (kind, label, x, y))
-        w("    .zero 4                      # entity entries are 16 bytes")
     w("    .byte 0xff")
     w("    .zero 15")
 
@@ -638,6 +779,17 @@ for i, mp in enumerate(MAPS):
     w("")
 
 w("# -------------------------------------------------------- map table -----")
+w(".globl enc_tables, enc_counts, enc_levels")
+w("enc_tables:")
+for tbl in ENCOUNTERS:
+    if tbl:                 # an empty group owns no bytes, so the rows stay
+        w("    .byte " + ",".join(str(x) for x in tbl))   # exactly counts long
+w("enc_counts:")
+w("    .byte " + ",".join(str(len(t)) for t in ENCOUNTERS))
+w("enc_levels:")
+for lo, hi in LEVELS:
+    w("    .byte %d,%d" % (lo, hi))
+w("")
 w(".globl map_tilesets")
 w("map_tilesets:")
 w("    .byte " + ",".join("1" if mp["name"] in INDOOR_MAPS else "0"

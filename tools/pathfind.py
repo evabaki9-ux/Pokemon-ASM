@@ -16,7 +16,9 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "src", "data.s")
 
-WALKABLE = set(".,LDF:")
+# terrain the player can stand on: sand and shallow water are walkable
+# (you surf out onto the lake), rock is the cave floor, rug is indoors
+WALKABLE = set(".,LDF:~srg")
 
 # tmap -> (map label in data.s, entity markers that sit on walkable ground)
 MAP_LABELS = {}
@@ -33,6 +35,19 @@ def load_tiles():
         idx = int(m.group(1))
         maps[idx] = re.findall(r'\.ascii "([^"]*)"', m.group(2))
     return maps
+
+
+def load_npcs():
+    """{map index: {(x, y)}} -- people stand in the way, so the walk has to
+    know about them: an NPC on the road is a wall, not a step"""
+    src = open(DATA).read()
+    out = {}
+    for m in re.finditer(r"^\.globl map(\d+)_npcs\n((?:(?!\.globl).)*)",
+                         src, re.M | re.S):
+        out[int(m.group(1))] = set(
+            (int(a), int(b)) for a, b in
+            re.findall(r"    \.byte (\d+),(\d+),", m.group(2)))
+    return out
 
 
 def grid(idx, maps=None):
@@ -53,21 +68,39 @@ def find(grid_rows, ch):
     return None
 
 
+# Ground that can throw a wild POKeMON at you.  A route that crosses it is
+# still legal, but it costs more, so the walk prefers the road: a scripted
+# playthrough must not be ambushed halfway to where it is going.
+WILD = set(",~r")
+WILD_COST = 12
+
+
 def path(rows, start, goal, avoid=()):
-    """shortest route (list of 'u'/'d'/'l'/'r') from start to goal, or None"""
+    """Cheapest route (list of 'u'/'d'/'l'/'r') from start to goal, or None.
+
+    Dijkstra rather than BFS: encounter ground is walkable but expensive."""
+    import heapq
     h = len(rows)
     w = max(len(r) for r in rows)
     if start == goal:
         return []
-    seen = {start: None}
-    queue = [start]
-    while queue:
-        cur = queue.pop(0)
+    best = {start: 0}
+    prev = {}
+    heap = [(0, start)]
+    while heap:
+        cost, cur = heapq.heappop(heap)
+        if cur == goal:
+            out = []
+            node = cur
+            while node in prev:
+                node, k = prev[node]
+                out.append(k)
+            return list(reversed(out))
+        if cost > best.get(cur, 1 << 30):
+            continue
         for k, (dx, dy) in DIRS.items():
-            nxt = (cur[0] + dx, cur[1] + dy)
-            if nxt in seen:
-                continue
-            x, y = nxt
+            x, y = cur[0] + dx, cur[1] + dy
+            nxt = (x, y)
             if not (0 <= x < w and 0 <= y < h):
                 continue
             if nxt != goal:
@@ -75,22 +108,19 @@ def path(rows, start, goal, avoid=()):
                     continue
                 if nxt in avoid:
                     continue
-            seen[nxt] = (cur, k)
-            if nxt == goal:
-                out = []
-                node = nxt
-                while seen[node]:
-                    prev, k2 = seen[node]
-                    out.append(k2)
-                    node = prev
-                return list(reversed(out))
-            queue.append(nxt)
+            step = WILD_COST if rows[y][x] in WILD else 1
+            ncost = cost + step
+            if ncost < best.get(nxt, 1 << 30):
+                best[nxt] = ncost
+                prev[nxt] = (cur, k)
+                heapq.heappush(heap, (ncost, nxt))
     return None
 
 
 def script(idx, start, goal, gap=6):
     """walk from start to goal, as a tests/play.py input string"""
-    steps = path(grid(idx), start, goal)
+    npcs = load_npcs().get(idx, set())
+    steps = path(grid(idx), start, goal, avoid=npcs - {goal})
     if steps is None:
         raise SystemExit("no path on map %d from %s to %s" % (idx, start, goal))
     return "".join("." * gap + s for s in steps)

@@ -15,7 +15,7 @@
 .set TILE_SZ,    40                # bytes per tile_defs entry
 .set ENT_SZ,     16                # bytes per map entity entry
 .set SPR_SZ,     40                # bytes per ent_sprite_defs entry
-.set TILE_OUT,   14                # index of the "nothing" tile
+.set TILE_OUT,   23                # index of the "nothing" tile
 .set TILE_GRASS, 0
 .set ENC_RATE,   14                # percent per step in tall grass
 .set MOVE_DELAY, 4                 # frames between steps when a key is held
@@ -39,10 +39,6 @@ auto_t:     .byte 0
 .section .rodata
 dir_dx:     .byte 0, 0, -1, 1
 dir_dy:     .byte -1, 1, 0, 0
-enc_species:.byte 3, 4, 4, 5, 6, 7        # PIDGEY RATTATA(x2) ODDISH MEOWTH PIKACHU
-n_enc:      .byte 6
-enc_lmin:   .byte 3
-enc_lmax:   .byte 6
 
 str_ready:  .asciz "PROF. OAK\fTake good care\nof your new\npartner!\fWild POKeMON hide\nin tall grass.\fZ: talk/confirm\nX: cancel\nM: menu"
 str_healed: .asciz "NURSE\fYour POKeMON are\nfighting fit!\fWe hope to see\nyou again!"
@@ -359,26 +355,50 @@ ow_check_warp:
     pop rbx
     ret
 
+# enc_table_for(edi=encounter group) -> rax = pointer to that group's row
+enc_table_for:
+    lea rax, [rip+enc_tables]
+    lea rcx, [rip+enc_counts]
+    xor esi, esi
+1:  cmp esi, edi
+    jae 2f
+    movzx edx, byte ptr [rcx+rsi]
+    add rax, rdx                         # rows are as long as their table
+    inc esi
+    jmp 1b
+2:  ret
+
 # ------------------------------------------------------------- encounters ---
 ow_try_encounter:
     push rbx
     push r12
+    push r14
     call rng_next
     xor edx, edx
     mov ecx, 100
     div ecx
     cmp edx, ENC_RATE
     jae 9f
+    # the group comes in from the tile the player stepped on (edi), so the
+    # water holds MAGIKARP and the cave floor holds GEODUDE wherever they are
+    mov r14d, edi                        # encounter group
+    lea rcx, [rip+enc_counts]
+    movzx ecx, byte ptr [rcx+r14]
+    test ecx, ecx
+    jz 9f
+    mov r12d, ecx                        # species count
+    mov rdi, r14
+    call enc_table_for
+    mov rbx, rax
+    call rng_next                        # species roll (same draw count as ever)
+    xor edx, edx
+    div r12d
+    movzx ebx, byte ptr [rbx+rdx]
     call rng_next
     xor edx, edx
-    movzx ecx, byte ptr [rip+n_enc]
-    div ecx
-    lea rcx, [rip+enc_species]
-    movzx ebx, byte ptr [rcx+rdx]
-    call rng_next
-    xor edx, edx
-    movzx ecx, byte ptr [rip+enc_lmax]
-    movzx r12d, byte ptr [rip+enc_lmin]
+    lea rcx, [rip+enc_levels]
+    movzx r12d, byte ptr [rcx+r14*2]     # low
+    movzx ecx, byte ptr [rcx+r14*2+1]    # high
     sub ecx, r12d
     inc ecx
     div ecx
@@ -386,7 +406,8 @@ ow_try_encounter:
     mov byte ptr [rip+wild_spec], bl
     mov byte ptr [rip+wild_lvl], dl
     call battle_start_wild
-9:  pop r12
+9:  pop r14
+    pop r12
     pop rbx
     ret
 
@@ -439,8 +460,8 @@ ow_try_move:
     movzx eax, byte ptr [rcx+rax]
     imul eax, eax, TILE_SZ
     lea rcx, [rip+tile_defs]
-    movzx eax, byte ptr [rcx+rax+37]    # encounter flag
-    test eax, eax
+    movzx edi, byte ptr [rcx+rax+37]    # encounter group for this tile
+    test edi, edi
     jz .Ltm_done
     call ow_try_encounter
 .Ltm_done:
@@ -1063,7 +1084,7 @@ ow_draw:
     jmp 2f
 1:  lea rcx, [rip+char_to_tile]
     movzx eax, byte ptr [rcx+rax]
-2:  cmp eax, 15
+2:  cmp eax, 24
     jb 3f
     push rdi
     push rsi

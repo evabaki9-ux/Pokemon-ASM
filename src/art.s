@@ -822,111 +822,6 @@ art_bg_1:
     .long 0x000002,0x000002,0x000002,0x000002,0x000002,0x000002,0x000002,0x000002,0x000002,0x000002
     .long 0x000002,0x000002,0x000002,0x000002,0x000002,0x000002,0x000002,0x000002,0x000002,0x000002
 
-# set 0 tile 0
-.globl art_tile_0_0
-art_tile_0_0:
-    .long 0x0a002e,0x0a002e,0x0a002e,0x0a002e
-
-# set 0 tile 1
-.globl art_tile_0_1
-art_tile_0_1:
-    .long 0x02002b,0x02003a,0x02002b,0x02003a
-
-# set 0 tile 2
-.globl art_tile_0_2
-art_tile_0_2:
-    .long 0x02003a,0x02003a,0x02002e,0x02002e
-
-# set 0 tile 3
-.globl art_tile_0_3
-art_tile_0_3:
-    .long 0x01002e,0x01002e,0x01002e,0x01002e
-
-# set 0 tile 4
-.globl art_tile_0_4
-art_tile_0_4:
-    .long 0x07003a,0x07003a,0x07003a,0x07003a
-
-# set 0 tile 5
-.globl art_tile_0_5
-art_tile_0_5:
-    .long 0x0e0023,0x0e0023,0x0e0023,0x0e0023
-
-# set 0 tile 6
-.globl art_tile_0_6
-art_tile_0_6:
-    .long 0x09002b,0x09002b,0x09002b,0x09002b
-
-# set 0 tile 7
-.globl art_tile_0_7
-art_tile_0_7:
-    .long 0x03002e,0x03002e,0x03002e,0x03002e
-
-# set 0 tile 8
-.globl art_tile_0_8
-art_tile_0_8:
-    .long 0x03002e,0x03002e,0x03002e,0x03002e
-
-# set 0 tile 9
-.globl art_tile_0_9
-art_tile_0_9:
-    .long 0x03003a,0x03003a,0x03003a,0x03003a
-
-# set 0 tile 10
-.globl art_tile_0_10
-art_tile_0_10:
-    .long 0x01002b,0x01002b,0x02002b,0x02002b
-
-# set 0 tile 11
-.globl art_tile_0_11
-art_tile_0_11:
-    .long 0x02003a,0x02003a,0x02003a,0x02003a
-
-# set 0 tile 12
-.globl art_tile_0_12
-art_tile_0_12:
-    .long 0x03003a,0x03003a,0x03003a,0x03003a
-
-# set 0 tile 13
-.globl art_tile_0_13
-art_tile_0_13:
-    .long 0x01002b,0x01002b,0x02002b,0x02002b
-
-# set 1 tile 3
-.globl art_tile_1_3
-art_tile_1_3:
-    .long 0x07002b,0x07002b,0x07002b,0x07003a
-
-# set 1 tile 4
-.globl art_tile_1_4
-art_tile_1_4:
-    .long 0x03003a,0x03003a,0x03003a,0x03003a
-
-# set 1 tile 8
-.globl art_tile_1_8
-art_tile_1_8:
-    .long 0x03003a,0x03003a,0x03003a,0x03003a
-
-# set 1 tile 11
-.globl art_tile_1_11
-art_tile_1_11:
-    .long 0x02003a,0x02003a,0x02003a,0x02003a
-
-# set 1 tile 12
-.globl art_tile_1_12
-art_tile_1_12:
-    .long 0x07003a,0x07003a,0x07003a,0x07003a
-
-# set 1 tile 13
-.globl art_tile_1_13
-art_tile_1_13:
-    .long 0x07002b,0x07003a,0x07003a,0x07003a
-
-# set 1 tile 0
-.globl art_tile_1_0
-art_tile_1_0:
-    .long 0x07002e,0x07002e,0x07002e,0x07002e
-
 # generated title logo (POKeMON / FIRE RED wordmark)
 .globl art_logo
 art_logo:
@@ -1015,42 +910,55 @@ art_sml_tbl:
     .quad art_sml_12
     .quad art_sml_13
 
-# ---- map tiles: 4 words per tile (2x2 cells), one set per
-# tileset: 15 words each.  Set 0 is the overworld, set 1 the
-# indoors set -- the map says which one it wants.
-.globl art_tiles, art_tiles_per_set
-art_tiles_per_set: .byte 15
+# ---- map tiles -------------------------------------------------
+# A tileset holds the tiles its maps place, not every tile
+# that exists: art_tile_map says which picture set S tile T
+# wants (255 = this set cannot place this tile), and the
+# pictures themselves are pooled, so two sets that draw a
+# tile the same way share one copy.  Everything below is
+# reachable; nothing here is art the game never draws.
+.globl art_tiles, art_tiles_per_set, art_tile_map
+art_tiles_per_set: .byte 23
 art_tiles:
+    # blob 0: set 0 tile 0
     .long 0x0a002e,0x0a002e,0x0a002e,0x0a002e
+    # blob 1: set 0 tile 1
     .long 0x02002b,0x02003a,0x02002b,0x02003a
+    # blob 2: set 0 tile 2
     .long 0x02003a,0x02003a,0x02002e,0x02002e
-    .long 0x01002e,0x01002e,0x01002e,0x01002e
-    .long 0x07003a,0x07003a,0x07003a,0x07003a
+    # blob 3: set 0 tile 5
     .long 0x0e0023,0x0e0023,0x0e0023,0x0e0023
+    # blob 4: set 0 tile 6
     .long 0x09002b,0x09002b,0x09002b,0x09002b
+    # blob 5: set 0 tile 7
     .long 0x03002e,0x03002e,0x03002e,0x03002e
-    .long 0x03002e,0x03002e,0x03002e,0x03002e
+    # blob 6: set 0 tile 9
     .long 0x03003a,0x03003a,0x03003a,0x03003a
+    # blob 7: set 0 tile 10
     .long 0x01002b,0x01002b,0x02002b,0x02002b
+    # blob 8: set 0 tile 11
     .long 0x02003a,0x02003a,0x02003a,0x02003a
-    .long 0x03003a,0x03003a,0x03003a,0x03003a
-    .long 0x01002b,0x01002b,0x02002b,0x02002b
+    # blob 9: set 0 tile 15
+    .long 0x07003a,0x000000,0x000000,0x000000
+    # blob 10: set 0 tile 16
+    .long 0x07002b,0x07002b,0x07003a,0x07003a
+    # blob 11: set 0 tile 17
+    .long 0x07002e,0x07002e,0x07003a,0x07003a
+    # blob 12: set 0 tile 19
+    .long 0x07003a,0x07002b,0x07003a,0x07003a
+    # blob 13: set 0 tile 20
+    .long 0x03003a,0x03003a,0x03002e,0x03002e
+    # blob 14: set 0 tile 21
     .long 0x000000,0x000000,0x000000,0x000000
-    .long 0x07002e,0x07002e,0x07002e,0x07002e
-    .long 0x02002b,0x02003a,0x02002b,0x02003a
-    .long 0x02003a,0x02003a,0x02002e,0x02002e
+    # blob 15: set 0 tile 22
+    .long 0x05003a,0x05003a,0x05003a,0x05003a
+    # blob 16: set 1 tile 3
     .long 0x07002b,0x07002b,0x07002b,0x07003a
-    .long 0x03003a,0x03003a,0x03003a,0x03003a
-    .long 0x0e0023,0x0e0023,0x0e0023,0x0e0023
-    .long 0x09002b,0x09002b,0x09002b,0x09002b
-    .long 0x03002e,0x03002e,0x03002e,0x03002e
-    .long 0x03003a,0x03003a,0x03003a,0x03003a
-    .long 0x03003a,0x03003a,0x03003a,0x03003a
-    .long 0x01002b,0x01002b,0x02002b,0x02002b
-    .long 0x02003a,0x02003a,0x02003a,0x02003a
-    .long 0x07003a,0x07003a,0x07003a,0x07003a
+    # blob 17: set 1 tile 13
     .long 0x07002b,0x07003a,0x07003a,0x07003a
-    .long 0x000000,0x000000,0x000000,0x000000
+art_tile_map:
+    .byte 0,1,2,255,255,3,4,5,255,6,7,8,6,255,5,9,10,11,5,12,13,14,15
+    .byte 255,255,255,16,6,255,255,5,6,255,255,255,255,17,255,255,255,255,255,12,13,14,15
 art_bg_w: .byte 80
 art_bg_h: .byte 17
 art_bg_tbl:

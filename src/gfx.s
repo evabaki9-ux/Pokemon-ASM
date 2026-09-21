@@ -9,6 +9,7 @@
 
 # ---------------------------------------------------------------- data ------
 .section .bss
+
 .align 16
 termios_save: .skip 64
 termios_raw:  .skip 64
@@ -726,21 +727,27 @@ art_blit_tile:
     push rbx
     cmp edi, 0
     jl .Lbg_tile_none
-    cmp edi, 15
+    cmp edi, 23
     jae .Lbg_tile_none
     mov r11d, edx                       # keep y: rdx becomes the art pointer
-    # the map names its own tileset (outdoors / indoors), so the tile index
-    # has to be offset into that set
+    # the map names its own tileset (outdoors / indoors) and art_tile_map says
+    # which pooled picture that set uses for this tile -- 255 for a tile the
+    # set has no art for, which is a map bug rather than a crash
     movzx eax, byte ptr [rip+p_map]
     lea rcx, [rip+map_tilesets]
     movzx eax, byte ptr [rcx+rax]
     movzx ecx, byte ptr [rip+art_tiles_per_set]
-    imul eax, ecx                       # NOT imul eax,eax,ecx: that form
-    add edi, eax                        # does not exist and GAS encodes it
-                                        # as an EVEX insn that SIGILLs
-    shl edi, 4                          # 4 words per tile
-    lea rax, [rip+art_tiles]
-    lea rdx, [rax+rdi]
+    imul eax, ecx                       # set * tiles per set
+    add eax, edi                        # NOT imul eax,eax,ecx: that form does
+                                        # not exist and GAS encodes an EVEX
+                                        # insn that SIGILLs at runtime
+    lea rcx, [rip+art_tile_map]
+    movzx eax, byte ptr [rcx+rax]       # -> picture number in the pool
+    cmp eax, 255
+    je .Lbg_tile_none
+    shl eax, 4                          # 4 words per tile
+    lea rdx, [rip+art_tiles]
+    add rdx, rax
     mov edi, esi                        # x
     mov esi, r11d                       # y
     mov ecx, 2

@@ -165,11 +165,32 @@ TILE_SPECS = [
     (11, "tiles_out.png", 14, ("tiles_out.png", 5), None, "+"), # 11 flower bed
     (12, "tiles_out.png", 10, None, 3,  ":"),   # 12 dirt path
     (13, "tiles_bld.png", 6,  ("tiles_out.png", 5), None, "+"), # 13 POKe BALL
+    # 14+ : the beach, the cave and the scenery, so the rest of the generated
+    # sheets actually appears in the world
+    (14, "tiles_out.png", 8,  None, 3,  "."),   # sand (beach)
+    (15, "tiles_out.png", 21, None, 7,  "*"),   # cave floor: grey stone
+                                                # texture, dimmer than the walls
+    (16, "tiles_out.png", 17, None, 7,  "*"),   # boulder (cave wall)
+    # boulders cap high and the floor caps at '.': the wall has to be denser
+    # than the ground it stands on or the cave reads as a black rectangle
+    (17, "tiles_bld.png", 7,  None, 7,  "*"),   # white fence
+    (18, "tiles_bld.png", 11, None, 3,  "+"),   # treasure chest
+    # these four are interior furniture: set 0 carries a copy because both
+    # sets must be the same length, but only set 1 is ever placed
+    (19, "tiles_in.png", 5,  None, 7,  "+"),    # PC terminal
+    (20, "tiles_in.png", 6,  None, 3,  "+"),    # bookshelf
+    (21, "tiles_in.png", 13, None, 7,  "+"),    # bed
+    (22, "tiles_in.png", 9,  None, 5,  ":"),    # striped rug
 ]
 # The indoors set is the same 15 tiles with the room's own blocks swapped in.
 # Interiors are a separate tileset in the real games and they are here too:
 # the map itself says which set to use (map_tilesets in src/data.s).
 TILE_SPECS_IN = [
+    (14, "tiles_in.png", 0,  None, 3,  "."),    # sand won't appear indoors: planks
+    (15, "tiles_in.png", 0,  None, 3,  "."),    # cave floor likewise
+    (16, "tiles_in.png", 2,  None, 7,  "*"),    # boulder likewise: a wall
+    (17, "tiles_in.png", 2,  None, 7,  "*"),
+    (18, "tiles_in.png", 6,  None, 3,  "+"),    # a chest indoors: the shelf
     (3,  "tiles_in.png", 2,  None, 7,  "*"),    # wall: plaster + blue wainscot
     (4,  "tiles_in.png", 0,  None, 3,  ":"),    # floor: wooden planks
     (8,  "tiles_in.png", 4,  ("tiles_in.png", 0), 3, ":"),   # counter
@@ -179,7 +200,46 @@ TILE_SPECS_IN = [
     (0,  "tiles_in.png", 1,  None, 7,  "."),    # spare: white tile floor
     # 13 (TILE_OUT) is deliberately left empty: outside the map stays blank
 ]
-N_TILES = 15
+# Map tiles: the glyph ramp, not half blocks.  A tile only gets 2x2 cells, so
+# as pixels it is a 2x4 sprite, and at that size every tile collapses into a
+# flat colour field (grass and tall grass both come out plain green).  The ramp
+# carries texture the pixels cannot, so the world layer stays characters while
+# every picture in the game is drawn with blit_art_hb.  --tiles-px switches it.
+TILES_HB = False
+N_TILES = 23      # 0..22; the 'out' tile is not art
+# tiles whose art is dark enough that the ramp would leave them blank: hold
+# them at this minimum density so the cave floor shows up as stone, not as a
+# hole in the screen
+TILE_MIN = {15: ":"}
+
+
+def tiles_used():
+    """{(set, tile)} the game can actually reach, read off tools/gen_data.py.
+
+    A tileset is not "every tile there is": it is the tiles the maps that use
+    it place.  Deriving that here is what keeps art.s free of pictures no map
+    can ever draw (the audit that started this: 10 of 30 tile blobs were
+    unreachable)."""
+    import contextlib
+    import importlib.util
+    import io
+    path = os.path.join(ROOT, "tools", "gen_data.py")
+    spec = importlib.util.spec_from_file_location("gen_data_for_art", path)
+    mod = importlib.util.module_from_spec(spec)
+    with contextlib.redirect_stdout(io.StringIO()):
+        spec.loader.exec_module(mod)     # importing it also prints data.s
+    indoor = {i for i, mp in enumerate(mod.MAPS) if mp["name"] in mod.INDOOR_MAPS}
+    used = set()
+    for i, mp in enumerate(mod.MAPS):
+        setno = 1 if i in indoor else 0
+        floor = mp.get("floor", ".")
+        for row in mp["rows"]:
+            for ch in row:
+                ch2 = floor if ch in "NHP" else (":" if ch == "n" else ch)
+                t = mod.CHAR2TILE.get(ch2)
+                if t is not None:
+                    used.add((setno, t))
+    return used
 
 
 def content_box(im, tol=BGTOL):
@@ -198,8 +258,37 @@ def content_box(im, tol=BGTOL):
     return (x0, y0, x1, y1) if x1 >= 0 else (0, 0, w - 1, h - 1)
 
 
+def pixelate_mode(im, sw, sh, dim=1.0):
+    """Downsample to sw x sh the way pixel art wants it: each output pixel is
+    the *dominant* colour of its own block, not an average of it.  Averaging
+    (LANCZOS) turns a 2x4 tile into a flat rectangle -- at this size the eye
+    needs the block's real colour, and a cave keeps its rock grey only if the
+    sampling does not blend it with the shadow between the rocks."""
+    px = im.load()
+    w, h = im.size
+    out = Image.new("RGB", (sw, sh))
+    op = out.load()
+    for oy in range(sh):
+        y0 = oy * h // sh
+        y1 = max(y0 + 1, (oy + 1) * h // sh)
+        for ox in range(sw):
+            x0 = ox * w // sw
+            x1 = max(x0 + 1, (ox + 1) * w // sw)
+            counts = {}
+            for y in range(y0, y1):
+                for x in range(x0, x1):
+                    r, g, b = px[x, y]
+                    if dim != 1.0:
+                        r, g, b = int(r * dim), int(g * dim), int(b * dim)
+                    idx = nearest((r, g, b))[0]
+                    counts[idx] = counts.get(idx, 0) + 1
+            best = max(counts.items(), key=lambda kv: (kv[1], -kv[0]))[0]
+            op[ox, oy] = PAL_RGB[best] if best else (0, 0, 0)
+    return out
+
+
 def prepare_hb(path, cw, ch, crop=None, margin=0, minlum=0.20,
-               fit="contain", img=None, dim=1.0, no_bg=False):
+               fit="contain", img=None, dim=1.0, no_bg=False, mode=False):
     """-> [(idx, fg, bg)] one per cell, half-block style.
 
     One cell is two square pixels stacked (foreground on top, background
@@ -244,10 +333,16 @@ def prepare_hb(path, cw, ch, crop=None, margin=0, minlum=0.20,
         nw = min(sw * room, sh * room * aspect)
         nh = max(1, int(nw / aspect))
         nw = max(1, int(nw))
-    im = im.resize((nw, nh), Image.LANCZOS)
-    canvas = Image.new("RGB", (sw, sh), (0, 0, 0))
-    ox, oy = (sw - nw) // 2, (sh - nh) // 2
-    canvas.paste(im, (ox, oy))
+    if mode:
+        # exact size, one output pixel per source block: no black canvas, no
+        # letterboxing, every pixel is real art
+        im = pixelate_mode(im, sw, sh, dim)
+        canvas = im
+    else:
+        im = im.resize((nw, nh), Image.LANCZOS)
+        canvas = Image.new("RGB", (sw, sh), (0, 0, 0))
+        ox, oy = (sw - nw) // 2, (sh - nh) // 2
+        canvas.paste(im, (ox, oy))
     px = canvas.load()
     cells = []
     for cy in range(ch):
@@ -341,7 +436,7 @@ BACKDROPS = [("bg_field.png", "FIELD"), ("bg_city.png", "TOWN")]
 def prepare(path, tw, th, crop, margin, minlum, fit="contain", solid=False,
             absolute_ramp=False, ss=2, sprite_ramp=False, dim=1.0,
             bg_ramp=False, img=None, no_bg=False, tile_ramp=False,
-            max_glyph=None):
+            max_glyph=None, min_glyph=None):
     """-> (cells_w, cells_h, [(colour index, glyph) ...]) one entry per cell.
 
     The source is sampled on an `ss`-times finer grid than the cell grid, then
@@ -452,6 +547,13 @@ def prepare(path, tw, th, crop, margin, minlum, fit="contain", solid=False,
                 else:
                     ramp = SCENE_RAMP
                 glyph = shade(lums / float(n), ramp, max_glyph)
+                if min_glyph is not None:
+                    # a floor may not be a hole: when the source art is dark
+                    # the ramp picks ' ' and the tile would leave the screen
+                    # black, so hold it at a visible density
+                    ranks = [g for _, g in ramp]
+                    if ranks.index(glyph) < ranks.index(min_glyph):
+                        glyph = min_glyph
             cells.append((fg, glyph))
     return cw, ch, cells
 
@@ -561,6 +663,9 @@ def patch_defs(border_idx):
 
 def main():
     global ss
+    global TILES_HB
+    if "--tiles-px" in sys.argv:
+        TILES_HB = True
     if "--ss" in sys.argv:
         ss = int(sys.argv[sys.argv.index("--ss") + 1])
     print("  sampling grid: %d samples up, %d across per cell" % (ss, 2 * ss))
@@ -573,14 +678,15 @@ def main():
     def add(label, path, tw, th, crop, margin, minlum, header,
             fit="contain", solid=False, absr=False, sprite_ramp=False, ss=2,
             dim=1.0, bg_ramp=False, img=None, no_bg=False, tile_ramp=False,
-            max_glyph=None):
+            max_glyph=None, min_glyph=None):
         if not os.path.exists(path):
             print("  ! missing %s -- skipped" % os.path.basename(path))
             return None
         cw, ch, cells = prepare(path, tw, th, crop, margin, minlum, fit, solid,
                                 absr, ss=ss, sprite_ramp=sprite_ramp, dim=dim,
                                 bg_ramp=bg_ramp, img=img, no_bg=no_bg,
-                                tile_ramp=tile_ramp, max_glyph=max_glyph)
+                                tile_ramp=tile_ramp, max_glyph=max_glyph,
+                                min_glyph=min_glyph)
         ws = words(cells, cw)
         blobs.append((label, ws, tw, th, header))
         prev = preview(cells, cw, ch, os.path.join(OUT, label + ".png"))
@@ -634,6 +740,7 @@ def main():
                scene[5], scene[6], "# battle backdrop: %s, %dx%d cells"
                % (nm, BG_W, BG_H), "cover", dim=BG_DIM, no_bg=True)
 
+    dropped = []                     # tiles no map can reach (reported below)
     # ------------------------------------------------------------- tiles ----
     # one blob per map tile: art_tiles + tile*16 bytes, 2x2 cells, row-major.
     # Set 0 is the overworld, set 1 the indoors set, and every tile is a blob
@@ -642,6 +749,13 @@ def main():
     tile_set = {0: [None] * N_TILES, 1: [None] * N_TILES}
 
     def tile_blob(idx, sheet, block, base, force, cap, setno):
+        """one map tile: 2x2 cells, but every cell is a pair of square pixels.
+
+        Half blocks here too: a cell is 'top pixel / bottom pixel', so a tile
+        is a 2x4 pixel sprite instead of four characters of a shading ramp.
+        `force` and `cap` were there to fight the glyph ramp (the sampler had
+        to be dragged onto the tile's own colour and away from sparse dots);
+        with real pixels the sampled colours stand on their own."""
         nonlocal cache
         if sheet not in cache:
             cache[sheet] = Image.open(os.path.join(SRC, sheet)).convert("RGB")
@@ -653,15 +767,28 @@ def main():
             crop = None
         else:
             crop = block_rect(im, sheet, block)
-        # not solid: a tile IS texture, so the glyph ramp has to show through
-        ws = add("art_tile_%d_%d" % (setno, idx), os.path.join(SRC, sheet),
-                 2, 2, crop, 0, 0.08, "# set %d tile %d" % (setno, idx),
-                 "stretch", False, False, img=im, no_bg=True, tile_ramp=True,
-                 ss=3, dim=TILE_DIM, max_glyph=None if cap == "*" else cap)
-        if force is not None:
-            ws = [(w & 0xFF) | (force << 16) if w else 0 for w in ws]
-            blobs[-1] = (blobs[-1][0], ws, blobs[-1][2], blobs[-1][3],
-                         blobs[-1][4])
+        label = "art_tile_%d_%d" % (setno, idx)
+        if TILES_HB:
+            cw, ch, cells = prepare_hb(os.path.join(SRC, sheet), 2, 2, crop, 0,
+                                       0.08, "stretch", img=im, dim=TILE_DIM,
+                                       no_bg=True, mode=True)
+            ws = [i | (fg << 16) | (bg << 24) for (i, fg, bg) in cells]
+            blobs.append((label, ws, 2, 2, "# set %d tile %d" % (setno, idx)))
+            prev = preview_hb(cells, cw, ch, os.path.join(OUT, label + ".png"))
+            print("  %-10s %2dx%-2d cells  %4d words   %s"
+                  % (label, 2, 2, len(ws), os.path.basename(prev)))
+            print(text_preview_hb(cells, cw, ch))
+            print()
+        else:
+            ws = add(label, os.path.join(SRC, sheet), 2, 2, crop, 0, 0.08,
+                     "# set %d tile %d" % (setno, idx), "stretch", False,
+                     False, img=im, no_bg=True, tile_ramp=True, ss=3,
+                     dim=TILE_DIM, max_glyph=None if cap == "*" else cap,
+                     min_glyph=TILE_MIN.get(idx))
+            if force is not None:
+                ws = [(w & 0xFF) | (force << 16) if w else 0 for w in ws]
+                blobs[-1] = (blobs[-1][0], ws, blobs[-1][2], blobs[-1][3],
+                             blobs[-1][4])
         tile_set[setno][idx] = ws
 
     for spec in TILE_SPECS:
@@ -669,6 +796,31 @@ def main():
     tile_set[1] = list(tile_set[0])          # indoors starts as the outdoors set
     for spec in TILE_SPECS_IN:
         tile_blob(spec[0], spec[1], spec[2], spec[3], spec[4], spec[5], 1)
+
+    # ---- what the maps can reach: pool the pictures, drop the rest --------
+    # tile_set[s][t] is the words for that tile in that set (set 1 started as a
+    # copy of set 0, so a tile the interior set never overrides is the *same*
+    # picture -- it must not be emitted twice, and a tile no map in that set
+    # places must not be emitted at all).
+    used = tiles_used()
+    tile_pool, tile_pool_src, tile_map = [], [], {0: [], 1: []}
+    seen = {}
+    for setno in (0, 1):
+        for t in range(N_TILES):
+            ws = tile_set[setno][t]
+            if ws is None or (setno, t) not in used:
+                tile_map[setno].append(255)
+                if ws is not None:
+                    dropped.append("set %d tile %d" % (setno, t))
+                continue
+            key = tuple(ws)
+            if key not in seen:
+                seen[key] = len(tile_pool)
+                tile_pool.append(ws)
+                tile_pool_src.append("set %d tile %d" % (setno, t))
+            tile_map[setno].append(seen[key])
+    # ... and take those blobs back out of the picture list
+    blobs[:] = [b for b in blobs if not b[0].startswith("art_tile_")]
 
     # -------------------------------------------------------------- logo ----
     # stretched, not contained: at 48x8 cells a pixel-art wordmark has to use
@@ -750,17 +902,23 @@ def main():
         fh.write("art_sml_tbl:\n")
         for i in range(n_art):
             fh.write("    .quad art_sml_%d\n" % i)
-        fh.write("\n# ---- map tiles: %d words per tile (2x2 cells), one set per\n"
-                 "# tileset: %d words each.  Set 0 is the overworld, set 1 the\n"
-                 "# indoors set -- the map says which one it wants.\n"
-                 % (2 * 2, N_TILES))
-        fh.write(".globl art_tiles, art_tiles_per_set\n")
+        fh.write("\n# ---- map tiles -------------------------------------------------\n"
+                 "# A tileset holds the tiles its maps place, not every tile\n"
+                 "# that exists: art_tile_map says which picture set S tile T\n"
+                 "# wants (255 = this set cannot place this tile), and the\n"
+                 "# pictures themselves are pooled, so two sets that draw a\n"
+                 "# tile the same way share one copy.  Everything below is\n"
+                 "# reachable; nothing here is art the game never draws.\n")
+        fh.write(".globl art_tiles, art_tiles_per_set, art_tile_map\n")
         fh.write("art_tiles_per_set: .byte %d\n" % N_TILES)
         fh.write("art_tiles:\n")
+        for i, ws in enumerate(tile_pool):
+            fh.write("    # blob %d: %s\n" % (i, tile_pool_src[i]))
+            fh.write("    .long " + ",".join("0x%06x" % x for x in ws) + "\n")
+        fh.write("art_tile_map:\n")
         for setno in (0, 1):
-            for t in range(N_TILES):
-                ws = tile_set[setno][t] or [0, 0, 0, 0]
-                fh.write("    .long " + ",".join("0x%06x" % x for x in ws) + "\n")
+            row = tile_map[setno]
+            fh.write("    .byte " + ",".join(str(v) for v in row) + "\n")
         n_bg = sum(1 for l, _, _, _, _ in blobs if l.startswith("art_bg_"))
         if n_bg:
             fh.write("art_bg_w: .byte %d\nart_bg_h: .byte %d\n" % (BG_W, BG_H))
@@ -775,8 +933,11 @@ def main():
         fh.write("\n.section .text\n# vim: sw=4 ts=4\n")
     if frame_cols:
         patch_defs(frame_cols[0])
-    print("wrote %s (%d words, %d species with art)"
-          % (ASM, sum(len(w) for _, w, _, _, _ in blobs), n_art))
+    print("wrote %s (%d words in %d pooled tile pictures, %d species with art)"
+          % (ASM, sum(len(w) for w in tile_pool), len(tile_pool), n_art))
+    if dropped:
+        print("  dropped %d tile pictures no map can reach: %s"
+              % (len(dropped), ", ".join(dropped)))
 
 
 if __name__ == "__main__":

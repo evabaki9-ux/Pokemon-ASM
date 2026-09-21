@@ -6,7 +6,7 @@ it talks to are the raw Linux syscalls (`read`, `write`, `open`, `mmap`,
 `rt_sigaction`, `clock_nanosleep`, …). It renders a 16-colour ANSI
 framebuffer, reads the keyboard in raw mode, and saves to a file.
 
-* static binary, ~128 KB, links against nothing
+* static binary, ~130 KB, links against nothing
 * Intel syntax (`as .intel_syntax noprefix`), one file per subsystem
 * plays in any 80×24 terminal
 
@@ -45,15 +45,20 @@ whatever directory you launch it from.
    that is where wild POKéMON live. Fight with `z`, catch things from the BAG.
 4. The house with the red roof in VIRIDIAN CITY heals your team (talk to the
    NURSE). The rival is standing in the city too.
-5. `m` → `SAVE` writes your game; the title screen will offer to continue.
+5. The east gate of ROUTE 1 opens onto **ROUTE 2**: a beach, a pier you can
+   walk off the end of (MAGIKARP live in the lake), and the ridge east of the
+   sand — step through the cave mouth at its foot and **GRANITE CAVE** holds
+   GEODUDE, a treasure chest and a hiker who will tell you about it.
+6. `m` → `SAVE` writes your game; the title screen will offer to continue.
 
 **Other commands**
 
 ```
-make test       # 19 scripted headless playthroughs, checked frame by frame
-make demo       # scripted demo, printed as screens
+make test       # 22 scripted headless playthroughs, checked frame by frame
+make maps       # reachability audit of the generated maps
 make tour       # walkthrough -> docs/TOUR.md (real dumped frames)
 make art        # re-convert art_src/*.png -> src/art.s and rebuild
+make screens    # docs/shots/*.png -> docs/screens.html
 ```
 
 `tools/ptyrender.py OUT.png --scenario battle` renders a real screen to a PNG,
@@ -74,11 +79,16 @@ and `docs/screens.html` collects them.
 
 ## What is in the game
 
-* **Overworld** — 4 maps (PALLET TOWN, ROUTE 1, VIRIDIAN CITY, POKéMON
-  CENTER) on a scrolling 40×8-tile viewport rendered as 2×2-character
-  tiles, NPCs, signs, item balls, warps, and gates between maps.
-* **Wild battles** — step into tall grass and something jumps out; the
-  encounter table carries species and level ranges.
+* **Overworld** — 7 maps on a scrolling 40×8-tile viewport: PALLET TOWN,
+  ROUTE 1, VIRIDIAN CITY, the POKéMON CENTER, **ROUTE 2** (the lake: sand, a
+  pier out over the water, fences, a treasure chest, the cave mouth),
+  **GRANITE CAVE** (boulder walls, stone floor, a hiker's camp with a PC,
+  shelf, bedroll and rug) and **RED's HOUSE** (the interior set). NPCs,
+  signs, item balls, chests, warps and gates between maps.
+* **Wild battles** — the *tile* you step on picks the encounter table, the
+  way the real games do it: tall grass holds PIDGEY/RATTATA/ODDISH/MEOWTH/
+  PIKACHU, the lake is surfable and holds MAGIKARP, and the cave floor holds
+  GEODUDE. Sand, roads and grass are safe ground.
 * **Gen-3 damage maths** — `((2·L/5+2)·pow·A/D)/50+2`, then type
   effectiveness (×0…×4), STAB ×1.5, critical ×2, and the 85–100 % random
   factor, floored at 1.
@@ -90,9 +100,10 @@ and `docs/screens.html` collects them.
 * **Meta** — three starters (CHARMANDER / BULBASAUR / SQUIRTLE, the rival
   always takes the one that beats yours), party screen with a stats
   summary, bag (POTION, POKé BALL), Pokédex (SEEN/CAUGHT), save & continue.
-* **Ten species** with real stats, types, catch rates, XP yields and
+* **Fourteen species** with real stats, types, catch rates, XP yields and
   16-colour sprite art: Charmander, Bulbasaur, Squirtle, Pidgey, Rattata,
-  Oddish, Meowth, Pikachu, Magikarp, Geodude.
+  Oddish, Meowth, Pikachu, Magikarp, Geodude — plus the four evolutions
+  Charmeleon, Ivysaur, Wartortle and Pidgeotto.
 
 ## Layout
 
@@ -112,7 +123,12 @@ tests/play.py         scripted input strings, one scenario per feature
 tests/run_tests.py    the check: run the real binary, assert on the frames
 tools/gen_data.py     map/sprite/text compiler with layout validation
 tools/dumpframe.py    print a dumped frame as an 80×24 grid
-tools/pathfind.py     BFS over the map data -> walking routes for the tests
+tools/pathfind.py     route finding over the map data (avoiding NPCs and wild
+                      ground) -> walking routes for the tests
+tools/check_maps.py   reachability audit: every door, sign, item, NPC and
+                      encounter ground, per map, plus which tiles get placed
+tools/make_screens.py docs/shots/*.png -> docs/screens.html (data URIs, one file)
+tools/tour.py         playthrough -> docs/TOUR.md (real frames, as text)
 tools/ptyplay.py      drive the real terminal version from a pty
 tools/vt.py           tiny ANSI/VT emulator (used by the pty harness)
 tools/art2cells.py    art_src/*.png -> src/art.s (colour quantiser, cell fitter)
@@ -144,10 +160,14 @@ python3 tools/dumpframe.py /tmp/frames.txt        # every dumped frame
 * `--level N` — put the starter at level N (for testing late-game paths).
 * `--trace` — dump the debug markers to stderr (crash bisection aid).
 
-`make test` runs 18 scenarios (title, intro, walking, grass encounters,
+`make test` runs 22 scenarios (title, intro, walking, grass encounters,
 menus, party, bag, dex, save, load, wild battle, win, run, catch, Pokémon
-Center, nurse healing, trainer battle) and checks the exit status, the
-absence of a crash report, and the actual contents of the rendered frames.
+Center, nurse healing, trainer battle, evolution, the lake, the cave and
+RED's house) and checks the exit status, the absence of a crash report, and
+the actual contents of the rendered frames.  `python3 tools/check_maps.py`
+is the other half of that: it walks the generated maps and reports anything
+a player could not reach — a door, a sign, an item, an NPC, the water, the
+cave floor — before the tests are trusted with a new map.
 
 There is also a crash reporter inside the binary: a SIGSEGV handler prints
 the faulting address, RIP, seven registers and sixteen stack words, so a
@@ -155,76 +175,45 @@ failure in the sandbox is diagnosable without gdb.
 
 ## The art
 
-Everything you look at was generated as 16-bit Game Boy Advance style pixel
-art and then converted into coloured text cells — the title scene, the map
-tiles themselves, the six creatures that watch Oak talk, the three starters on
-the picker, both battlers, and the two battle backdrops (a grass field for
-wild encounters, a town street for the rival fight). All ten species are covered: CHARMANDER,
-BULBASAUR, SQUIRTLE, PIDGEY, RATTATA, ODDISH, MEOWTH, PIKACHU, MAGIKARP and
-GEODUDE.
-`docs/screens.html` shows the real screens.
+Everything you look at is generated as Game Boy Advance style pixel art and
+then converted into the game's own colour cells — the title scene, the logo,
+the dialogue and menu frames, the terrain/object sheets, both battle
+backdrops, and all fourteen species (three starters, Pidgey, Rattata, Oddish,
+Meowth, Pikachu, Magikarp, Geodude and the four evolutions).
+
+The pictures are drawn as **pixels, not characters**.  A terminal cell is two
+square pixels stacked: one word per cell holds a foreground colour for the top
+half and a background colour for the bottom half, and the blitter picks the
+half block that matches what the source art had there.
 
 ```
-art_src/title.png      -> src/art.s: art_title   80x24 cells (the whole screen)
-art_src/charmander.png ->           art_big_0     12x8  (starter picker)
-art_src/charmander.png ->           art_sml_0     12x5  (in battle)
-...
-art_src/magikarp.png   ->           art_sml_8     12x5  (Oak's lab)
-art_src/geodude.png    ->           art_sml_9     12x5  (Oak's lab)
-art_src/bg_field.png   ->           art_bg_0      80x17 (wild battles)
-art_src/bg_city.png    ->           art_bg_1      80x17 (trainer battles)
-art_src/tiles_out.png  ->           art_tiles     13 tiles (terrain sheet, 8x4 blocks)
-art_src/tiles_bld.png  ->           art_tiles     13 tiles (buildings/objects, 4x4 blocks)
+art_src/title.png       -> src/art.s: art_title    80x24 cells (the whole screen)
+art_src/logo.png        ->           art_logo      48x8  (the wordmark)
+art_src/charmander.png  ->           art_big_0     12x8  (starter picker)
+art_src/charmander.png  ->           art_sml_0     12x5  (in battle, on the status bar)
+art_src/pidgeotto.png   ->           art_sml_13    12x5
+art_src/bg_field.png    ->           art_bg_0      80x17 (wild battles)
+art_src/bg_city.png     ->           art_bg_1      80x17 (trainer battles)
+art_src/frame.png       ->           art_frame_border / art_frame_inner
+art_src/tiles_out.png   ->           art_tiles     terrain sheet, spare pictures dropped
+art_src/tiles_bld.png   ->           art_tiles     buildings and objects
+art_src/tiles_in.png    ->           art_tiles     interior set (rooms, furniture)
 ```
 
-`tools/art2cells.py` crops each picture to its subject (the background colour
-is read from the four corners, so white-background art works too), scales it
-to the cell box *accounting for the fact that a character cell is twice as
-tall as it is wide*, then decides each cell independently: the dominant colour
-of the cell becomes the ANSI colour and the cell's mean brightness picks a
-glyph from a short ramp (` . : + #`). Creature cells are drawn solid, so the
-shape comes from colour rather than dithering.
+The tileset is deliberately **sparse**: the map names a tileset, and for each
+(tileset, tile) pair the game looks up which pooled picture to draw
+(`art_tile_map`, 255 meaning "this set cannot place that tile").  Only
+pictures that some map can actually reach are emitted at all, so `src/art.s`
+holds no art the game never shows — `tools/check_maps.py` reports the
+coverage and `tools/art2cells.py` drops and lists the rest.
 
-Scenery is converted with a dimmed palette and a sparser glyph ramp
-(`BG_DIM`, `BG_RAMP`) — a full-strength picture behind the battle boxes is
-unreadable.
+One exception is deliberate: map tiles keep the glyph ramp rather than the
+half-block pixels.  A tile gets 2x2 cells, which as pixels is a 2x4 picture,
+and at that size every tile collapses into a flat colour field — the ramp
+carries texture that eight pixels cannot.
 
-Map tiles come out of two generated tileset sheets, one block per tile,
-composited onto a background block where the subject needs one (the signboard
-stands on grass, the ball on the lawn) and given an explicit colour each — the
-tileset's palette is a design decision, not something to leave to the
-quantiser, or a tree and a lawn end up the same green.
-
-Pictures are drawn as **pixels, not characters**: `blit_art_hb` writes the
-upper-half-block glyph and splits each cell's two colours between foreground
-(top pixel) and background (bottom pixel), so a sprite is 12x16 *square*
-pixels instead of 12x8 fat characters. The converter samples at that doubled
-resolution and packs every cell into `idx | (fg<<16) | (bg<<24)` (1 = two
-colours, 2 = solid, 0 = transparent). Text and the overworld tiles are
-unaffected and share the same framebuffer.
-
-`src/art.s` stores one dword per cell, `glyph | (colour << 16)`, with `0`
-meaning "leave this cell alone". `blit_art` writes those words straight into
-the framebuffer (clipping to 80x24); `art_blit_big`/`art_blit_small` pick the
-blob for a species and do nothing at all for a species that has no art yet.
-
-### Evolution
-
-A POKeMON that reaches the level in its species record changes form: the
-level-up message plays, then `What? X is evolving!`, then
-`Congratulations! Your X evolved into Y!`. Level, EXP, moves and the damage
-taken all carry over -- only the species changes, and the stats and sprite
-follow from it. Four species can evolve right now (the three starters at 16,
-PIDGEY at 18); the other six have `0xFF` in their record and never do.
-
-The evolve target lives in the species record (`S_EVO` at +31, `S_EVO_LV` at
-+32, `S_SZ` 40 bytes), and `tools/gen_data.py` refuses to emit a record that
-is not exactly 33 real bytes before padding: getting that wrong misaligns the
-whole table and the game segfaults the moment a battle starts.
-
-`--xp N` gives the starter EXP at boot, next to `--level N`. It is what the
-`evolve` test case uses to leave CHARMANDER one win short of level 16, so the
-battle itself is the thing that triggers the evolution.
+`docs/screens.html` shows the real screens;
+`python3 tools/make_screens.py` rebuilds that page from `docs/shots/`.
 
 ## Notes
 

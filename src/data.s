@@ -308,7 +308,7 @@ tile_defs:
     .quad g_c126
     .quad g_c126
     .quad g_c126
-    .byte 78,78,78,78,0,0,0,0
+    .byte 78,78,78,78,1,2,0,0
     .quad g_c95
     .quad g_c95
     .quad g_c124
@@ -349,6 +349,51 @@ tile_defs:
     .quad g_c35
     .quad g_c35
     .byte 31,31,31,31,0,0,0,0
+    .quad g_c46
+    .quad g_c46
+    .quad g_c46
+    .quad g_c46
+    .byte 59,59,59,59,1,0,0,0
+    .quad g_c32
+    .quad g_c32
+    .quad g_c32
+    .quad g_c32
+    .byte 127,127,127,127,1,3,0,0
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .byte 127,127,127,127,0,0,0,0
+    .quad g_c124
+    .quad g_c124
+    .quad g_c124
+    .quad g_c124
+    .byte 127,127,127,127,0,0,0,0
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .byte 59,59,59,59,0,0,0,0
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .byte 126,126,126,126,0,0,0,0
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .byte 51,51,51,51,0,0,0,0
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .byte 126,126,126,126,0,0,0,0
+    .quad g_c32
+    .quad g_c32
+    .quad g_c32
+    .quad g_c32
+    .byte 93,93,93,93,1,0,0,0
     .quad g_c32
     .quad g_c32
     .quad g_c32
@@ -357,13 +402,13 @@ tile_defs:
 
 .globl n_tiles
 .globl n_tiles
-n_tiles: .byte 15
+n_tiles: .byte 24
 
 .globl char_to_tile
 .globl char_to_tile
 char_to_tile:
-    .byte 14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,2,9,14,14,14,14,14,10,14,1,14,0,14,14,14,14,14,14,14,14,14,14,14,12,14,14,14,14,14
-    .byte 14,14,14,8,7,14,11,14,14,14,14,14,4,13,14,14,14,14,6,14,14,14,14,3,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,5,14
+    .byte 23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,2,9,23,23,23,23,23,10,23,1,23,0,23,23,23,23,23,23,23,23,23,23,23,12,23,23,23,23,23
+    .byte 23,23,23,8,7,21,11,23,23,23,23,23,4,13,23,23,23,23,6,23,23,23,23,3,23,23,23,23,23,23,23,23,23,23,16,23,23,23,17,22,23,23,23,20,23,23,23,23,19,23,15,14,23,23,23,23,18,23,23,23,23,23,5,23
 
 # ----------------------------------------------------- entity sprites ---
 .globl ent_sprite_defs
@@ -468,31 +513,28 @@ map0_tiles:
 .globl map0_npcs
 map0_npcs:
     .byte 17,10,0,5
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_npc_map0_npcs_17_10
-    .zero 4                      # entity entries are 16 bytes
-    .byte 11,9,0,2
-    .quad str_npc_map0_npcs_11_9
-    .zero 4                      # entity entries are 16 bytes
     .byte 24,16,0,1
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_npc_map0_npcs_24_16
-    .zero 4                      # entity entries are 16 bytes
     .byte 0xff
     .zero 15
 .globl map0_signs
 map0_signs:
     .byte 21,2,0,0
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_sign_map0_signs_21_2
-    .zero 4                      # entity entries are 16 bytes
     .byte 14,9,0,0
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_sign_map0_signs_14_9
-    .zero 4                      # entity entries are 16 bytes
     .byte 0xff
     .zero 15
 .globl map0_items
 map0_items:
     .byte 8,13,0,0
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_item_map0_items_8_13
-    .zero 4                      # entity entries are 16 bytes
     .byte 0xff
     .zero 15
 .globl map0_links
@@ -503,7 +545,7 @@ map0_links:
     .byte 0xff,0,0
 .globl map0_warps
 map0_warps:
-    .byte 10,7,3,5,7
+    .byte 10,7,6,6,7
     .byte 30,7,3,6,7
     .byte 0xff
 .globl map0_spawn
@@ -511,8 +553,6 @@ map0_spawn: .byte 19,10,40,24
 
 .globl str_npc_map0_npcs_17_10
 str_npc_map0_npcs_17_10: .asciz "PROF. OAK\fPOKeMON are my\ntrue love!\fWild ones live in\nthe tall grass.\fPress M for the\nmenu, Z to talk."
-.globl str_npc_map0_npcs_11_9
-str_npc_map0_npcs_11_9: .asciz "MOM\fAll boys leave\nhome some day.\fIt said so on TV!"
 .globl str_npc_map0_npcs_24_16
 str_npc_map0_npcs_24_16: .asciz "KID\fTall grass hides\nwild POKeMON.\fWalk in it and\nwatch out!"
 .globl str_sign_map0_signs_21_2
@@ -547,8 +587,8 @@ map1_tiles:
     .ascii "#............####..::...####...........#"
     .ascii "#..........F.####..::...####F..........#"
     .ascii "#..................::..................#"
-    .ascii "#.......::::::::::::::::::::::::.......#"
-    .ascii "#.......::::::::::::::::::::::::.......#"
+    .ascii "#.......::::::::::::::::::::::::........"
+    .ascii "#.......::::::::::::::::::::::::........"
     .ascii "#..................::..................#"
     .ascii "#..................::..................#"
     .ascii "#................F.::..................#"
@@ -571,25 +611,25 @@ map1_tiles:
 .globl map1_npcs
 map1_npcs:
     .byte 22,20,0,1
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_npc_map1_npcs_22_20
-    .zero 4                      # entity entries are 16 bytes
     .byte 16,28,0,2
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_npc_map1_npcs_16_28
-    .zero 4                      # entity entries are 16 bytes
     .byte 0xff
     .zero 15
 .globl map1_signs
 map1_signs:
     .byte 18,34,0,0
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_sign_map1_signs_18_34
-    .zero 4                      # entity entries are 16 bytes
     .byte 0xff
     .zero 15
 .globl map1_items
 map1_items:
     .byte 34,4,1,0
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_item_map1_items_34_4
-    .zero 4                      # entity entries are 16 bytes
     .byte 0xff
     .zero 15
 .globl map1_links
@@ -597,7 +637,7 @@ map1_links:
     .byte 2,254,30
     .byte 0,254,2
     .byte 0xff,0,0
-    .byte 0xff,0,0
+    .byte 4,1,254
 .globl map1_warps
 map1_warps:
     .byte 0xff
@@ -654,28 +694,28 @@ map2_tiles:
 .globl map2_npcs
 map2_npcs:
     .byte 17,12,0,3
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_npc_map2_npcs_17_12
-    .zero 4                      # entity entries are 16 bytes
     .byte 24,17,2,4
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_npc_map2_npcs_24_17
-    .zero 4                      # entity entries are 16 bytes
     .byte 32,20,0,2
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_npc_map2_npcs_32_20
-    .zero 4                      # entity entries are 16 bytes
     .byte 0xff
     .zero 15
 .globl map2_signs
 map2_signs:
     .byte 22,28,0,0
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_sign_map2_signs_22_28
-    .zero 4                      # entity entries are 16 bytes
     .byte 0xff
     .zero 15
 .globl map2_items
 map2_items:
     .byte 8,14,0,0
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_item_map2_items_8_14
-    .zero 4                      # entity entries are 16 bytes
     .byte 0xff
     .zero 15
 .globl map2_links
@@ -723,11 +763,8 @@ map3_tiles:
 .globl map3_npcs
 map3_npcs:
     .byte 3,4,1,3
+    .zero 4                      # padding: the pointer lives at +8
     .quad str_npc_map3_npcs_3_4
-    .zero 4                      # entity entries are 16 bytes
-    .byte 8,4,0,2
-    .quad str_npc_map3_npcs_8_4
-    .zero 4                      # entity entries are 16 bytes
     .byte 0xff
     .zero 15
 .globl map3_signs
@@ -754,14 +791,234 @@ map3_spawn: .byte 5,7,12,9
 
 .globl str_npc_map3_npcs_3_4
 str_npc_map3_npcs_3_4: .asciz "NURSE\fWelcome to the\nPOKeMON CENTER!\fShall I heal\nyour POKeMON?"
-.globl str_npc_map3_npcs_8_4
-str_npc_map3_npcs_8_4: .asciz "MOM\fTake care out\nthere, RED!"
+
+# ----- map 4: ROUTE 2 (40x28) spawn (0, 0) -----
+.globl map4_name
+map4_name: .asciz "ROUTE 2"
+.globl map4_tiles
+map4_tiles:
+    .ascii "########################################"
+    .ascii "#bbbbbDbbbbb...........................#"
+    .ascii "#b.....$...............................#"
+    .ascii "#b....::::::::..........,,,,,,,,,,,,...#"
+    .ascii "#b..........::..........,,,,,,,,,,,,...#"
+    .ascii "#brrrr......::..........,,,,,,,,,,,,...#"
+    .ascii "#brrrr......::..fssssssssssssssssssssss#"
+    .ascii "#brrrr......::..fs*ssssssss:sssssssssss#"
+    .ascii "#...........::..f$sssssssss:ssssss.ssss#"
+    .ascii "#...........::..fss~~~~~~~~:~~~~~~~~~ss#"
+    .ascii "#...........::..fss~~~~~~~~:~~~~~~~~~ss#"
+    .ascii "#...........::..fss~~~~~~~~:~~~~~~~~~ss#"
+    .ascii "#.ffffff....::..fffff~~~~~~:~~~~~~~~~ss#"
+    .ascii "#.ffffff....::..sss~~~~~~~~:~~~~~~~~~ss#"
+    .ascii "#.fFfFff....::..sss~~~~~~~~~~~~~~~~~~ss#"
+    .ascii "#.ffffff....::..sss~~~~~~~~~~~~~~~~~~ss#"
+    .ascii "#.fFfFff....::..sss~~~~~~~~~~~~~~~~~~ss#"
+    .ascii "#.ffffff....::..sss~~~~~~~~~~~~~~~~~~ss#"
+    .ascii "#...........::..sss~~~~~~~~~~~~~~~~~~ss#"
+    .ascii "#$..........::..sss~~~~~~~~~~~~~~~~~~ss#"
+    .ascii ".:::::::::::::..sss~~~~~~~~~~~~~~~~~~ss#"
+    .ascii ".:::::::::::::..sss~~~~~~~~~~~~~~~~~~ss#"
+    .ascii "#.,,,,,,,,,,....sss~~~~~~~~~~~~~~~~~~ss#"
+    .ascii "#.,,,,,,,,,,....sss~~~~~~~~~~~~~~~~~~ss#"
+    .ascii "#.,,,,,,,,,,....ssssssssssssssssssssxss#"
+    .ascii "#.,,,,,,,,,,....sssss.sssssssssssssssss#"
+    .ascii "#......................................#"
+    .ascii "########################################"
+    .byte 0
+.globl map4_npcs
+map4_npcs:
+    .byte 21,25,0,1
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_npc_map4_npcs_21_25
+    .byte 34,8,0,2
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_npc_map4_npcs_34_8
+    .byte 10,4,0,5
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_npc_map4_npcs_10_4
+    .byte 0xff
+    .zero 15
+.globl map4_signs
+map4_signs:
+    .byte 1,19,0,0
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_sign_map4_signs_1_19
+    .byte 7,2,0,0
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_sign_map4_signs_7_2
+    .byte 17,8,0,0
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_sign_map4_signs_17_8
+    .byte 36,24,0,0
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_sign_map4_signs_36_24
+    .byte 0xff
+    .zero 15
+.globl map4_items
+map4_items:
+    .byte 18,7,1,0
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_item_map4_items_18_7
+    .byte 0xff
+    .zero 15
+.globl map4_links
+map4_links:
+    .byte 0xff,0,0
+    .byte 0xff,0,0
+    .byte 1,38,254
+    .byte 0xff,0,0
+.globl map4_warps
+map4_warps:
+    .byte 6,1,5,4,10
+    .byte 0xff
+.globl map4_spawn
+map4_spawn: .byte 0,0,40,28
+
+.globl str_npc_map4_npcs_21_25
+str_npc_map4_npcs_21_25: .asciz "FISHER\fMAGIKARP live in\nthe lake.\fHopeless things,\nnormally.\fBut you can walk\nright out onto the\nwater and find\nout for yourself!"
+.globl str_npc_map4_npcs_34_8
+str_npc_map4_npcs_34_8: .asciz "LASS\fThis sand is warm.\fNothing ever\njumps out of it.\fThe water, mind\nyou, is another\nstory."
+.globl str_npc_map4_npcs_10_4
+str_npc_map4_npcs_10_4: .asciz "HIKER\fGRANITE CAVE is\nbehind me.\fGEODUDE sleep on\nthe cave floor --\nstep on it and one\nwakes up angry!"
+.globl str_sign_map4_signs_1_19
+str_sign_map4_signs_1_19: .asciz "ROUTE 2\fWEST: ROUTE 1\fEAST: THE LAKE"
+.globl str_sign_map4_signs_7_2
+str_sign_map4_signs_7_2: .asciz "GRANITE CAVE\fA hiker's camp\nis just inside."
+.globl str_sign_map4_signs_17_8
+str_sign_map4_signs_17_8: .asciz "THE LAKE\fDEEP AND COLD"
+.globl str_sign_map4_signs_36_24
+str_sign_map4_signs_36_24: .asciz "A CHEST\fHalf-buried in\nthe sand.\fThe lock is rusty\nand shut."
+.globl str_item_map4_items_18_7
+str_item_map4_items_18_7: .asciz "\fYou found a\nPOKe BALL!\fIt went into\nyour BAG."
+
+# ----- map 5: GRANITE CAVE (16x12) spawn (4, 10) -----
+.globl map5_name
+map5_name: .asciz "GRANITE CAVE"
+.globl map5_tiles
+map5_tiles:
+    .ascii "bbbbbbbbbbbbbbbb"
+    .ascii "brrrrrrrrrrrrrrb"
+    .ascii "bpkrrrrrrrrbbbrb"
+    .ascii "brrrrrrbbbrbbbrb"
+    .ascii "brrrrrrbbbrrrrrb"
+    .ascii "brrrrrrrrrrrrrrb"
+    .ascii "brrrrrrrrrrrrrrb"
+    .ascii "brrrrrrrrrrrrxrb"
+    .ascii "brrrrrsssssrrrrb"
+    .ascii "bErrrrrgrrrrrrrb"
+    .ascii "brrrrrrrrrrrrrrb"
+    .ascii "bbbbDbbbbbbbbbbb"
+    .byte 0
+.globl map5_npcs
+map5_npcs:
+    .byte 7,6,0,1
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_npc_map5_npcs_7_6
+    .byte 0xff
+    .zero 15
+.globl map5_signs
+map5_signs:
+    .byte 13,7,0,0
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_sign_map5_signs_13_7
+    .byte 0xff
+    .zero 15
+.globl map5_items
+map5_items:
+    .byte 0xff
+    .zero 15
+.globl map5_links
+map5_links:
+    .byte 0xff,0,0
+    .byte 0xff,0,0
+    .byte 0xff,0,0
+    .byte 0xff,0,0
+.globl map5_warps
+map5_warps:
+    .byte 4,11,4,6,2
+    .byte 0xff
+.globl map5_spawn
+map5_spawn: .byte 4,10,16,12
+
+.globl str_npc_map5_npcs_7_6
+str_npc_map5_npcs_7_6: .asciz "HIKER\fThis is my camp.\fI dig down here\nfor GEODUDE.\fCareful where you\nstep -- the whole\nfloor is theirs!"
+.globl str_sign_map5_signs_13_7
+str_sign_map5_signs_13_7: .asciz "A CHEST\fFull of POKe BALLs\nthat belong to\nthe hiker.\fBetter leave it\nalone."
+
+# ----- map 6: RED's HOUSE (12x9) spawn (6, 7) -----
+.globl map6_name
+map6_name: .asciz "RED's HOUSE"
+.globl map6_tiles
+map6_tiles:
+    .ascii "WWWWWWWWWWWW"
+    .ascii "WpkkLLLLLMMW"
+    .ascii "WLLLLLLLLLLW"
+    .ascii "WLLLLLLLLLLW"
+    .ascii "WLLgggLLEELW"
+    .ascii "WCCgggLLEELW"
+    .ascii "WLLLLLLLEELW"
+    .ascii "WLLLLLLLLLLW"
+    .ascii "WWWWWDDWWWWW"
+    .byte 0
+.globl map6_npcs
+map6_npcs:
+    .byte 3,6,0,2
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_npc_map6_npcs_3_6
+    .byte 0xff
+    .zero 15
+.globl map6_signs
+map6_signs:
+    .byte 9,1,0,0
+    .zero 4                      # padding: the pointer lives at +8
+    .quad str_sign_map6_signs_9_1
+    .byte 0xff
+    .zero 15
+.globl map6_items
+map6_items:
+    .byte 0xff
+    .zero 15
+.globl map6_links
+map6_links:
+    .byte 0xff,0,0
+    .byte 0xff,0,0
+    .byte 0xff,0,0
+    .byte 0xff,0,0
+.globl map6_warps
+map6_warps:
+    .byte 5,8,254,0,0
+    .byte 6,8,254,0,0
+    .byte 0xff
+.globl map6_spawn
+map6_spawn: .byte 6,7,12,9
+
+.globl str_npc_map6_npcs_3_6
+str_npc_map6_npcs_3_6: .asciz "MOM\fAll boys leave\nhome some day.\fIt said so on TV!\fTake care of that\nPOKeMON of yours!"
+.globl str_sign_map6_signs_9_1
+str_sign_map6_signs_9_1: .asciz "A movie is on\nTV: two POKeMON\nin a battle!"
 
 # -------------------------------------------------------- map table -----
+.globl enc_tables, enc_counts, enc_levels
+.globl enc_tables
+enc_tables:
+    .byte 3,4,4,5,6,7
+    .byte 8,8,8
+    .byte 9,9,9,5
+.globl enc_counts
+enc_counts:
+    .byte 0,6,3,4
+.globl enc_levels
+enc_levels:
+    .byte 0,0
+    .byte 3,6
+    .byte 5,12
+    .byte 6,14
+
 .globl map_tilesets
 .globl map_tilesets
 map_tilesets:
-    .byte 0,0,0,1
+    .byte 0,0,0,1,0,0,1
 
 .globl map_table
 .globl map_table
@@ -774,9 +1031,15 @@ map_table:
     .quad map2_items, map2_links, map2_warps, map2_spawn
     .quad map3_name, map3_tiles, map3_npcs, map3_signs
     .quad map3_items, map3_links, map3_warps, map3_spawn
+    .quad map4_name, map4_tiles, map4_npcs, map4_signs
+    .quad map4_items, map4_links, map4_warps, map4_spawn
+    .quad map5_name, map5_tiles, map5_npcs, map5_signs
+    .quad map5_items, map5_links, map5_warps, map5_spawn
+    .quad map6_name, map6_tiles, map6_npcs, map6_signs
+    .quad map6_items, map6_links, map6_warps, map6_spawn
 .globl n_maps
 .globl n_maps
-n_maps: .byte 4
+n_maps: .byte 7
 
 # ----------------------------------------------------------- strings -----
 .globl str_title

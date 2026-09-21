@@ -148,13 +148,14 @@ CASES = [
     Case("run", want_frames=3,
          want=[r"^# m=1 .* s=9", r"Got away", r"^# m=1 x=12 .* s=9"]),
     Case("catch", want_frames=2, want=[r"POKe BALL", r"^# m=1 .* s=9"]),
-    Case("center", want_frames=2,
-         want=[r"^# m=3 x=5 y=7 .* s=3", r"POKeMON CENTER",
-               r"CHARMANDER  Lv   5  HP  19/ 19"]),
-    Case("heal", want_frames=2,
+    Case("center", want_frames=7,
+         want=[r"^# m=3 x=6 y=7 .* s=3", r"POKeMON CENTER",
+               r"CHARMANDER  Lv   5  HP  19/ 19",
+               r"Welcome to the", r"Shall I heal", r"We hope to see"]),
+    Case("heal", want_frames=7,
          want=[r"^# m=1 .* s=3 .*hp=18/19",   # hurt in the wild battle
                r"^# m=3 x=3 y=5 .*hp=19/19",    # at the counter, healed
-               r"We hope to see"]),
+               r"Your POKeMON are", r"We hope to see"]),
     # evolution: a level-up that crosses the threshold in battle turns
     # CHARMANDER into CHARMELEON, with the two message beats in between
     # The dialogue types itself out a character at a time, so a dumped frame
@@ -164,9 +165,22 @@ CASES = [
          want=[r"CHARMANDER grew to", r"evolving!",
                r"Congratulations!", r"evolved into CHARMELEON",
                r"CHARMELEON  Lv  16"]),
-    Case("rival", want_frames=4, args=["--level", "20"],
+    Case("rival", want_frames=5, args=["--level", "20"],
          want=[r"^# m=2 x=23 y=17 .* s=3", r"SQUIRTLE           Lv 9",
                r"^# m=2 x=23 y=17 .* s=3 .* hp=[0-9]+/"]),
+    # the new ground: ROUTE 2 (the lake) and GRANITE CAVE.  Water and cave
+    # floor are the encounter tables, so a wild MAGIKARP / GEODUDE is the
+    # proof that the new art is on the map and reachable.
+    Case("lake", want_frames=3,
+         want=[r"^# m=4 x=1 y=21 .* s=3", r"ROUTE 2",
+               r"^# m=4 x=27 y=14 .* s=3",        # standing on the water
+               r"A wild MAGIKARP appeared!"]),
+    Case("cave", want_frames=2,
+         want=[r"^# m=5 x=4 y=10 .* s=3", r"GRANITE CAVE",
+               r"A wild GEODUDE appeared!"]),
+    # RED's HOUSE: the interior set's furniture, and MOM is in it
+    Case("house", want_frames=2,
+         want=[r"^# m=6 x=6 y=7 .* s=3", r"RED's HOUSE", r"MOM"]),
 ]
 
 

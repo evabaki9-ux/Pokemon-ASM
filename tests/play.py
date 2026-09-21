@@ -9,6 +9,7 @@ The binary consumes exactly one character per frame:
 
 Usage:  python3 tests/play.py <scenario>
 Scenarios: title starter ow walk grass menu battle save load
+           lake cave house
 """
 import os
 import sys
@@ -71,7 +72,8 @@ def starter_to_world():
 
 
 QUICK = ("ow", "walk", "grass", "menu", "battle", "save", "win", "run",
-         "catch", "center", "heal", "party", "bag", "dex", "rival", "evolve")
+         "catch", "center", "heal", "party", "bag", "dex", "rival", "evolve",
+         "lake", "cave", "house", "shot_route2", "shot_cave", "shot_house", "shot_center")
 
 
 def new_game(name):
@@ -106,10 +108,13 @@ def mash(n=16, gap=70):
 
 
 def walk_to_center(start=(19, 10)):
-    """PALLET: start -> the door tile of the house at (10,7) -> POKeMON CENTER"""
+    """PALLET: start -> the door at (30,7) -> POKeMON CENTER.
+
+    (10,7) is RED's house now, so the CENTER is entered through the other
+    door: inside, the landing tile is (6,7), not (5,7)."""
     if pathfind:
-        return pathfind.script(0, start, (10, 7))
-    return step("d", 12) + step("u", 10) + step("u", 4) + step("l", 9) + step("u", 1)
+        return pathfind.script(0, start, (30, 7))
+    return step("d", 12) + step("u", 10) + step("u", 4) + step("r", 9) + step("u", 1)
 
 
 def walk_to_rival():
@@ -128,9 +133,54 @@ def leave_grass(from_tile=(12, 26)):
     return step("r", 7) + step("d", 20)
 
 
+def walk_to_route2(start=(19, 10)):
+    """PALLET -> ROUTE 1 -> east gate -> ROUTE 2, arriving at (1,21)
+
+    pathfind routes round the encounter ground, so the only wild step in a
+    scripted walk is the one the test means to take."""
+    if pathfind:
+        s = pathfind.script(0, start, (19, 1)) + step("u", 1)     # north gate
+        s += pathfind.script(1, (19, 38), (38, 21)) + step("r", 1)  # east gate
+        return s + wait(20)
+    return step("u", 22) + step("r", 20)
+
+
+def walk_to_lake(start=(1, 21)):
+    """ROUTE 2 arrival -> along the road -> the pier -> one step onto water"""
+    if pathfind:
+        return pathfind.script(4, start, (27, 13)) + step("d", 1)
+    return step("r", 26) + step("d", 7)
+
+
+def walk_to_cave(start=(1, 21)):
+    """ROUTE 2 arrival -> the road -> the cave mouth in the ridge"""
+    if pathfind:
+        s = pathfind.script(4, start, (6, 2))
+        return s + step("u", 1) + wait(40)      # (6,1) is the door
+    return step("r", 5) + step("u", 17) + wait(40)
+
+
+def walk_to_house(start=(19, 10)):
+    """PALLET spawn -> the door of RED's house at (10,7) -> inside"""
+    if pathfind:
+        return pathfind.script(0, start, (10, 7)) + wait(20)
+    return step("l", 9) + step("u", 3) + wait(20)
+
+
 def talk_to_nurse():
-    """from the CENTER arrival tile (5,7): left, up to (3,5), talk north"""
-    return step("l", 2) + step("u", 2) + tap("a")
+    """from the CENTER arrival tile (6,7): left, up to (3,5), talk north"""
+    return step("l", 3) + step("u", 2) + tap("a")
+
+
+def nurse_conversation():
+    """the whole NURSE exchange, one dump per page: her welcome, the question,
+    the heal and the two pages of "we hope to see you again".  The dialogue is
+    real text now, so a scripted talk needs one page per page."""
+    s = talk_to_nurse()
+    for txt in ("NURSE", "Welcome to the", "Shall I heal",
+                "NURSE", "Your POKeMON are", "We hope to see"):
+        s += wait(230) + dump() + page()
+    return s
 
 
 def dense(name):
@@ -201,26 +251,54 @@ def scenario(name):
         s += tap("r") + tap("a") + wait(60)      # right -> BAG, open it
         s += tap("d") + tap("a") + wait(200)     # down -> POKe BALL, throw it
         s += dump()
+    elif name == "lake":
+        s += new_game(name) + walk_to_route2() + dump()   # on ROUTE 2
+        s += walk_to_lake() + dump()                      # standing on water
+        s += wander(14) + wait(90) + dump()               # something bites
+    elif name == "cave":
+        s += new_game(name) + walk_to_route2()
+        s += walk_to_cave() + dump()                      # inside the cave
+        s += wander(14) + wait(90) + dump()               # GEODUDE wakes up
+    elif name == "house":
+        s += new_game(name) + walk_to_house() + dump()    # inside RED's HOUSE
+        # up off the doormat, then into MOM: the third step is blocked by her,
+        # which is what turns the player to face her
+        s += step("u", 1) + step("l", 3) + tap("a") + wait(260) + dump()
+    # three walks that only exist to take a picture of a place
+    elif name == "shot_route2":
+        # the lake, the pier, the fence and the beach in one frame
+        s += new_game(name) + walk_to_route2()
+        s += pathfind.script(4, (1, 21), (24, 12)) + wait(30) + dump()
+    elif name == "shot_cave":
+        # the cave room: boulders, the rock floor, the hiker's camp
+        s += new_game(name) + walk_to_route2() + walk_to_cave()
+        s += pathfind.script(5, (4, 10), (6, 8)) + wait(30) + dump()
+    elif name == "shot_center":
+        s += new_game(name) + walk_to_center() + step("u", 1) + wait(30) + dump()
+    elif name == "shot_house":
+        s += new_game(name) + walk_to_house()
+        s += pathfind.script(6, (6, 7), (6, 5)) + wait(30) + dump()
     elif name == "rival":
         s += new_game(name)
         # PALLET -> ROUTE 1 -> VIRIDIAN CITY, then talk to the rival
         s += step("u", 10) + step("u", 38)
         s += walk_to_rival()
         s += wait(80) + dump()                   # "RIVAL wants to fight!"
+        s += pages(3) + wait(120) + dump()       # ... the rest of his speech
         s += intro_done() + wait(60) + dump()    # his first POKeMON is out
         s += mash(24, 80) + wait(60) + dump()    # fight it out
         s += mash(24, 80) + wait(90) + dump()    # ... and his second one
     elif name == "center":
         s += new_game(name)
         s += walk_to_center() + wait(40) + dump()   # inside the CENTER
-        s += talk_to_nurse() + pages(3) + dump()    # NURSE heals the party
+        s += nurse_conversation()                   # she heals the party
     elif name == "heal":
         s += new_game(name) + battle_intro() + intro_done()
         s += mash(10, 70) + wait(30)             # win the fight, take damage
         s += mash(20, 60) + wait(60) + dump()
         s += leave_grass()                       # back into PALLET at (19,2)
         s += walk_to_center((19, 2)) + wait(40)
-        s += talk_to_nurse() + pages(3) + wait(60) + dump()
+        s += nurse_conversation()
     else:
         raise SystemExit("unknown scenario " + name)
     s += wait(30) + "q"
