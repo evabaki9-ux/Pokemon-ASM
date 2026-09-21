@@ -62,7 +62,7 @@ def shade(v, ramp, max_glyph=None):
             out = g
             break
     if max_glyph is not None:
-        order = [" ", ".", ":", "+", "#"]
+        order = [" ", ".", ":", "+", "*", "#"]
         if order.index(out) > order.index(max_glyph):
             out = max_glyph
     return out
@@ -427,7 +427,63 @@ def compose(base_im, base_sheet, base_idx, over_im, over_sheet, over_idx):
 BG_RAMP = [(0.28, " "), (0.50, "."), (0.72, ":"), (1.01, "+")]
 # Terrain wants to read as a *texture*, not as sparse dots: a map tile that is
 # mostly blank just looks like a hole in the map.
-TILE_RAMP = [(0.20, " "), (0.36, "."), (0.52, ":"), (0.70, "+"), (1.01, "#")]
+# The terrain sheets are flat colour blocks -- a GBA ground tile is a solid
+# colour -- so a tile gets its material from a *pattern*: the art says which
+# colour the ground is, the pattern says how it is textured.  density = how
+# many of the tile's four cells show the bright colour, in a 2x2 Bayer order
+# so the lighter cells are spread diagonally instead of piling up on one side.
+BAYER = {(0, 0): 0, (1, 0): 2, (0, 1): 3, (1, 1): 1}
+TILE_PATTERN = {
+    0:  (2, "#"),     # grass: a sprinkle
+    1:  (3, ":"),     # tall grass: you can hide in it
+    2:  (4, "#"),     # tree: a canopy, and dark
+    3:  (4, ":"),     # wall: brick courses
+    4:  (2, ":"),     # floor
+    5:  (2, ":"),     # water: waves
+    6:  (3, "#"),     # roof tiles
+    7:  (4, "|"),     # door: planks
+    8:  (4, ":"),     # shop counter
+    9:  (4, "#"),     # signboard
+    10: (3, "."),     # item
+    11: (3, "+"),     # flowers
+    12: (3, ":"),     # dirt path
+    13: (3, "."),     # ball
+    14: (2, "."),     # sand
+    15: (3, ":"),     # cave floor
+    16: (4, "#"),     # boulder
+    17: (3, "|"),     # fence
+    18: (4, "#"),     # chest
+    19: (4, "#"),     # PC
+    20: (4, "#"),     # bookshelf
+    21: (3, "="),     # bed
+    22: (2, "-"),     # striped rug
+}
+# a tile whose art reads dark wants its *dark* colour as the pattern, or the
+# canopy comes out the same green as the grass it stands on
+TILE_DARK = {2: True, 16: True, 17: True}
+# tiles the sampler reads as black but which must not be a hole in the map:
+# pin them to an explicit (base, feature) pair of palette entries instead
+TILE_FORCE = {15: (8, 7),   # cave floor: dark stone under a lighter speckle
+              16: (7, 8)}   # boulder: pale rock, so walls read as rock
+
+
+def dim(idx):
+    """the plain version of a palette entry: 8..15 are the bright half"""
+    return idx - 8 if idx >= 8 else idx
+
+
+def bright(idx):
+    """the bright version of a palette entry (give it a dim one)"""
+    idx = dim(idx)
+    if idx == 7:
+        return 15                          # grey -> white, not pink
+    if idx == 0:
+        return 8                           # black -> dark grey
+    return idx + 8
+
+
+TILE_RAMP = [(0.20, " "), (0.36, "."), (0.52, ":"), (0.66, "+"),
+             (0.82, "*"), (1.01, "#")]
 TILE_DIM = 0.85                      # keep the map a shade darker than sprites
 BG_DIM = 0.34
 BACKDROPS = [("bg_field.png", "FIELD"), ("bg_city.png", "TOWN")]
@@ -436,7 +492,7 @@ BACKDROPS = [("bg_field.png", "FIELD"), ("bg_city.png", "TOWN")]
 def prepare(path, tw, th, crop, margin, minlum, fit="contain", solid=False,
             absolute_ramp=False, ss=2, sprite_ramp=False, dim=1.0,
             bg_ramp=False, img=None, no_bg=False, tile_ramp=False,
-            max_glyph=None, min_glyph=None):
+            max_glyph=None, min_glyph=None, want_bg=False):
     """-> (cells_w, cells_h, [(colour index, glyph) ...]) one entry per cell.
 
     The source is sampled on an `ss`-times finer grid than the cell grid, then
@@ -530,9 +586,14 @@ def prepare(path, tw, th, crop, margin, minlum, fit="contain", solid=False,
                     if idx:
                         counts[idx] = counts.get(idx, 0) + 1
             if not counts:
-                cells.append((0, " "))
+                cells.append((0, " ", 0) if want_bg else (0, " "))
                 continue
             fg = max(counts.items(), key=lambda kv: (kv[1], -kv[0]))[0]
+            # a tile cell needs the ground colour it stands on as well as its
+            # feature: one glyph on black leaves the map reading as empty
+            # space, and the base colour is what turns a field of dots into
+            # grass.  The feature is what the glyph then draws on it.
+            base = fg
             if no_bg and len(counts) > 1:
                 fg = tile_feature(counts, sum(counts.values()), fg)
             if solid:
@@ -554,7 +615,7 @@ def prepare(path, tw, th, crop, margin, minlum, fit="contain", solid=False,
                     ranks = [g for _, g in ramp]
                     if ranks.index(glyph) < ranks.index(min_glyph):
                         glyph = min_glyph
-            cells.append((fg, glyph))
+            cells.append((fg, glyph, base) if want_bg else (fg, glyph))
     return cw, ch, cells
 
 
@@ -568,6 +629,14 @@ def words(cells, cw):
             continue
         out.append(ord(glyph) | ((col & 0x0f) << 16))
     return out
+
+
+def tile_words(cells):
+    """glyph | (fg << 16) | (base << 24).  A map tile cell is a coloured
+    square with a glyph on it, so unlike a sprite cell a blank one is not
+    transparent -- the base colour is the point of it."""
+    return [ord(g) | ((c & 0x0f) << 16) | ((b & 0x0f) << 24)
+            for (c, g, b) in cells]
 
 
 def preview_hb(cells, cw, ch, path, scale=6):
@@ -613,10 +682,17 @@ def preview(cells, cw, ch, path, scale=4):
     px = im.load()
     for y in range(ch):
         for x in range(cw):
-            col, glyph = cells[y * cw + x]
+            cell = cells[y * cw + x]
+            col, glyph = cell[0], cell[1]
+            base = cell[2] if len(cell) > 2 else 0
+            if base:
+                r, g, b = PAL_RGB.get(base, (0, 0, 0))
+                for dy in range(scale):
+                    for dx in range(scale):
+                        px[x * scale + dx, y * scale + dy] = (r, g, b)
             if col == 0:
                 continue
-            idx, r, g, b = PALETTE[col - 1]
+            r, g, b = PAL_RGB.get(col, (0, 0, 0))
             bits = GLYPH_BITS.get(glyph, GLYPH_BITS[" "])
             for by in range(4):
                 for bx in range(4):
@@ -780,15 +856,40 @@ def main():
             print(text_preview_hb(cells, cw, ch))
             print()
         else:
-            ws = add(label, os.path.join(SRC, sheet), 2, 2, crop, 0, 0.08,
-                     "# set %d tile %d" % (setno, idx), "stretch", False,
-                     False, img=im, no_bg=True, tile_ramp=True, ss=3,
-                     dim=TILE_DIM, max_glyph=None if cap == "*" else cap,
-                     min_glyph=TILE_MIN.get(idx))
+            cw, ch, cells = prepare(os.path.join(SRC, sheet), 2, 2, crop, 0,
+                                    0.08, "stretch", img=im, no_bg=True,
+                                    tile_ramp=True, ss=3, dim=TILE_DIM,
+                                    max_glyph=None if cap == "*" else cap,
+                                    min_glyph=TILE_MIN.get(idx), want_bg=True)
+            # the tile's own colour, from the sheet: the commonest of its
+            # four cells wins, so a tile that is mostly grass is green
+            tones = {}
+            for c, g, b in cells:
+                if b:
+                    tones[b] = tones.get(b, 0) + 1
+            main = max(tones.items(), key=lambda kv: kv[1])[0] if tones else 0
+            # foliage and rock read as *mass*: their colour on black, rather
+            # than a bright slab out of which the grass disappears
+            dark = TILE_DARK.get(idx)
+            base = 0 if dark else dim(main)
+            feat = dim(main) if dark else bright(main)
+            if idx in TILE_FORCE:
+                base, feat = TILE_FORCE[idx]
+            density, glyph = TILE_PATTERN.get(idx, (3, ":"))
+            cells = [(feat, glyph, base) if BAYER[(cx, cy)] < density
+                     else (base, " ", base)
+                     for cy in range(2) for cx in range(2)]
+            ws = tile_words(cells)
             if force is not None:
-                ws = [(w & 0xFF) | (force << 16) if w else 0 for w in ws]
-                blobs[-1] = (blobs[-1][0], ws, blobs[-1][2], blobs[-1][3],
-                             blobs[-1][4])
+                # the generator can still pin a tile to one palette entry
+                pass
+            blob = (label, ws, 2, 2, "# set %d tile %d" % (setno, idx))
+            blobs.append(blob)
+            prev = preview(cells, cw, ch, os.path.join(OUT, label + ".png"))
+            print("  %-10s %2dx%-2d cells  %4d words   %s"
+                  % (label, cw, ch, len(ws), os.path.basename(prev)))
+            print(text_preview(cells, cw, ch))
+            print()
         tile_set[setno][idx] = ws
 
     for spec in TILE_SPECS:

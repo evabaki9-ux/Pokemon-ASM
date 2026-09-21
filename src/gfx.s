@@ -582,9 +582,15 @@ blit_art:
     lea r9, [rip+fb_cells]
     movzx r10d, dl
     mov dword ptr [r9+rax], r10d
-    shr edx, 16
+    shr edx, 16                         # dl = feature colour, dh = base colour
+    mov eax, edx
+    and eax, 0x0f                       # the glyph is drawn in this one
+    shr edx, 8
+    and edx, 0x0f                       # the cell sits on this one
+    shl edx, 4                          # attr = (base << 4) | feature
+    or eax, edx
     lea r9, [rip+fb_attr]
-    mov byte ptr [r9+rsi], dl
+    mov byte ptr [r9+rsi], al
 .Lbg_art_next:
     inc ecx
     jmp .Lbg_art_col

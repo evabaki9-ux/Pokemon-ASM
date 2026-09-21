@@ -921,44 +921,50 @@ art_sml_tbl:
 art_tiles_per_set: .byte 23
 art_tiles:
     # blob 0: set 0 tile 0
-    .long 0x0a002e,0x0a002e,0x0a002e,0x0a002e
+    .long 0x20a0023,0x2020020,0x2020020,0x20a0023
     # blob 1: set 0 tile 1
-    .long 0x02002b,0x02003a,0x02002b,0x02003a
+    .long 0x20a003a,0x20a003a,0x2020020,0x20a003a
     # blob 2: set 0 tile 2
-    .long 0x02003a,0x02003a,0x02002e,0x02002e
+    .long 0x020023,0x020023,0x020023,0x020023
     # blob 3: set 0 tile 5
-    .long 0x0e0023,0x0e0023,0x0e0023,0x0e0023
+    .long 0x60e003a,0x6060020,0x6060020,0x60e003a
     # blob 4: set 0 tile 6
-    .long 0x09002b,0x09002b,0x09002b,0x09002b
+    .long 0x1090023,0x1090023,0x1010020,0x1090023
     # blob 5: set 0 tile 7
-    .long 0x03002e,0x03002e,0x03002e,0x03002e
+    .long 0x08007c,0x08007c,0x08007c,0x08007c
     # blob 6: set 0 tile 9
-    .long 0x03003a,0x03003a,0x03003a,0x03003a
+    .long 0x20a0023,0x20a0023,0x20a0023,0x20a0023
     # blob 7: set 0 tile 10
-    .long 0x01002b,0x01002b,0x02002b,0x02002b
+    .long 0x20a002e,0x20a002e,0x2020020,0x20a002e
     # blob 8: set 0 tile 11
-    .long 0x02003a,0x02003a,0x02003a,0x02003a
-    # blob 9: set 0 tile 15
-    .long 0x07003a,0x000000,0x000000,0x000000
-    # blob 10: set 0 tile 16
-    .long 0x07002b,0x07002b,0x07003a,0x07003a
-    # blob 11: set 0 tile 17
-    .long 0x07002e,0x07002e,0x07003a,0x07003a
-    # blob 12: set 0 tile 19
-    .long 0x07003a,0x07002b,0x07003a,0x07003a
-    # blob 13: set 0 tile 20
-    .long 0x03003a,0x03003a,0x03002e,0x03002e
-    # blob 14: set 0 tile 21
-    .long 0x000000,0x000000,0x000000,0x000000
-    # blob 15: set 0 tile 22
-    .long 0x05003a,0x05003a,0x05003a,0x05003a
-    # blob 16: set 1 tile 3
-    .long 0x07002b,0x07002b,0x07002b,0x07003a
-    # blob 17: set 1 tile 13
-    .long 0x07002b,0x07003a,0x07003a,0x07003a
+    .long 0x20a002b,0x20a002b,0x2020020,0x20a002b
+    # blob 9: set 0 tile 12
+    .long 0x30b003a,0x30b003a,0x3030020,0x30b003a
+    # blob 10: set 0 tile 14
+    .long 0x30b002e,0x3030020,0x3030020,0x30b002e
+    # blob 11: set 0 tile 15
+    .long 0x807003a,0x807003a,0x8080020,0x807003a
+    # blob 12: set 0 tile 16
+    .long 0x7080023,0x7080023,0x7080023,0x7080023
+    # blob 13: set 0 tile 17
+    .long 0x07007c,0x07007c,0x000020,0x07007c
+    # blob 14: set 0 tile 18
+    .long 0x30b0023,0x30b0023,0x30b0023,0x30b0023
+    # blob 15: set 0 tile 19
+    .long 0x40c0023,0x40c0023,0x40c0023,0x40c0023
+    # blob 16: set 0 tile 21
+    .long 0x08003d,0x08003d,0x000020,0x08003d
+    # blob 17: set 0 tile 22
+    .long 0x70f002d,0x7070020,0x7070020,0x70f002d
+    # blob 18: set 1 tile 3
+    .long 0x70f003a,0x70f003a,0x70f003a,0x70f003a
+    # blob 19: set 1 tile 4
+    .long 0x30b003a,0x3030020,0x3030020,0x30b003a
+    # blob 20: set 1 tile 13
+    .long 0x70f002e,0x70f002e,0x7070020,0x70f002e
 art_tile_map:
-    .byte 0,1,2,255,255,3,4,5,255,6,7,8,6,255,5,9,10,11,5,12,13,14,15
-    .byte 255,255,255,16,6,255,255,5,6,255,255,255,255,17,255,255,255,255,255,12,13,14,15
+    .byte 0,1,2,255,255,3,4,5,255,6,7,8,9,255,10,11,12,13,14,15,14,16,17
+    .byte 255,255,255,18,19,255,255,5,18,255,255,255,255,20,255,255,255,255,255,15,14,16,17
 art_bg_w: .byte 80
 art_bg_h: .byte 17
 art_bg_tbl:

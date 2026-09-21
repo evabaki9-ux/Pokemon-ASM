@@ -218,6 +218,14 @@ half-block pixels.  A tile gets 2x2 cells, which as pixels is a 2x4 picture,
 and at that size every tile collapses into a flat colour field — the ramp
 carries texture that eight pixels cannot.
 
+Even so, a map tile is *painted*, not typed.  Every tile picture carries two
+colours — the tile's own colour, which becomes the background of the cell, and
+a lighter or darker shade for its texture glyph — and the blitter sets the cell
+attribute to `(base << 4) | glyph`.  So grass is a green field with darker
+blades, water is blue, the cave floor is dark stone under a lighter speckle and
+a tree is a canopy of leaves on black: the overworld reads as terrain rather
+than as glyphs on a black screen.
+
 `docs/screens.html` shows the real screens;
 `python3 tools/make_screens.py` rebuilds that page from `docs/shots/`.
 

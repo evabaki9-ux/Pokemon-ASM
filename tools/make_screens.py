@@ -31,14 +31,17 @@ SECTIONS = [
                       "always did -- the pictures sit next to it."),
     ]),
     ("The world", [
-        ("pallet.png", "PALLET TOWN: houses, the cross street, the ponds and the "
-                       "tall grass on the west side."),
+        ("pallet.png", "PALLET TOWN. Every map cell is painted: the tile's own "
+                       "colour fills the cell and its texture glyph is drawn in a "
+                       "second colour, so grass is a green field, the roofs are "
+                       "red and the ponds are blue."),
         ("route1.png", "ROUTE 1 at the edge of the tall grass -- the first wild "
                        "ground in the game, and where the encounter table lives."),
         ("route2.png", "ROUTE 2, the lake route: sand, a pier out over the water, "
                        "a fenced look-out and the ridge with GRANITE CAVE."),
-        ("cave.png", "Inside GRANITE CAVE: boulders for walls, stone floor for the "
-                     "encounters, and a hiker's camp (PC, shelf, bedroll, rug)."),
+        ("cave.png", "Inside GRANITE CAVE: pale rock for walls, dark stone under a "
+                     "lighter speckle for the floor you wake GEODUDE on, and a "
+                     "hiker's camp (PC, shelf, bedroll, rug, sand)."),
         ("house.png", "RED's HOUSE: the interior tileset from tiles_in.png -- "
                       "wall, floor, bookshelf, TV, bed, rug, and MOM."),
         ("center.png", "The POKeMON CENTER, the other indoor map: counter, healing "
@@ -76,6 +79,10 @@ top half of the cell and a background colour for the bottom half, so one cell is
 <li>Map tiles are the deliberate exception: a tile only gets 2x2 cells, which as pixels is a 2x4 picture,
 and at that size every tile collapses into a flat colour field. The tiles keep the glyph ramp, which
 carries texture that eight pixels cannot.</li>
+<li>A map tile is still painted, not typed: its picture carries two colours -- the tile's own colour and a
+shade for the texture glyph -- and the blitter sets the cell attribute to <code>(base &lt;&lt; 4) | glyph</code>.
+That is why the overworld reads as terrain (green fields, blue water, grey stone) instead of glyphs on a
+black screen.</li>
 <li>The tileset table is sparse. <code>art_tile_map</code> names the pooled picture each (set, tile) pair
 uses, and only pictures that some map can actually draw are emitted at all -- nothing in
 <code>src/art.s</code> is art the game never shows.</li>

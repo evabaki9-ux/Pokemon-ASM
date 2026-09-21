@@ -83,15 +83,21 @@ def render(sc, path, scale=9):
     for y in range(sc.h):
         for x in range(sc.w):
             ch = sc.ch[y][x]
-            if not ch or ch == " ":
-                continue
             fg, bg = sc.at[y][x]
-            fg &= 0x0F
-            col = RGB[fg] if fg else (200, 200, 200)
             bx, by = x * scale, y * scale
+            # the background is part of the picture: a blank cell with a
+            # colour behind it is a solid square of that colour (that is how
+            # the map tiles are drawn), so paint it before giving up on the
+            # glyph
             if bg:
                 d.rectangle([bx, by, bx + scale - 1, by + scale - 1],
                             fill=RGB[bg & 0x0F])
+            if not ch or ch == " ":
+                continue
+            fg &= 0x0F
+            # fg 0 is a real black: only fall back to a grey when there is no
+            # background either, or the text would vanish into the dark
+            col = RGB[fg] if (fg or bg) else (200, 200, 200)
             if ch in "\u2580\u2588\u2584":
                 # block glyphs are pixels, not letters: draw them as pixels
                 half = scale // 2
@@ -131,7 +137,9 @@ def colourmap(sc):
 def main():
     args = sys.argv[1:]
     path = args[0]
-    extra = ["--fast"]
+    # --fixed-rng so a screenshot is reproducible: these walks cross wild
+    # ground, and an encounter is a coin flip otherwise
+    extra = ["--fast", "--fixed-rng"]
     if "--quickstart" in args:
         extra.append("--quickstart")
     if "--scenario" in args:
