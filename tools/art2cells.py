@@ -1,0 +1,647 @@
+#!/usr/bin/env python3
+"""
+tools/art2cells.py -- turn generated pixel art into the game's own cell data.
+
+The game draws an 80x24 grid of cells.  A cell holds up to two ASCII glyphs
+plus one 16-colour attribute, and bigger pictures are made of *pairs* of
+cells: one "word" covers 2x2 cells (2x2 glyphs).  That is the only way the
+formats line up, so this tool:
+
+  1. loads a generated PNG from art_src/,
+  2. crops/scales it so one source sample maps to one glyph of the target,
+  3. quantises every sample to the game's 15 colours + transparent,
+  4. picks a glyph per sample out of a coverage ramp ('.' ':' '*' '#'),
+  5. emits src/art.s: an array of 32-bit words (glyph0 | glyph1<<8 | attr<<16)
+     plus preview_*.png so the result can be looked at before it ships.
+
+usage:  python3 tools/art2cells.py [--preview-only]
+"""
+import os
+import struct
+import sys
+
+from PIL import Image
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC = os.path.join(ROOT, "art_src")
+OUT = os.path.join(ROOT, "build", "art")
+ASM = os.path.join(ROOT, "src", "art.s")
+
+# ---- the game's palette: ANSI 1..15, index 0 is black == transparent --------
+PALETTE = [
+    (1, 0xAA, 0x00, 0x00),   # C_RED
+    (2, 0x00, 0xAA, 0x00),   # C_GREEN
+    (3, 0xAA, 0x55, 0x00),   # C_YELLOW (orange)
+    (4, 0x00, 0x00, 0xAA),   # C_BLUE
+    (5, 0xAA, 0x00, 0xAA),   # C_MAGENTA
+    (6, 0x00, 0xAA, 0xAA),   # C_CYAN
+    (7, 0xAA, 0xAA, 0xAA),   # C_WHITE  (light grey)
+    (8, 0x55, 0x55, 0x55),   # C_GRAY
+    (9, 0xFF, 0x55, 0x55),   # C_BRED
+    (10, 0x55, 0xFF, 0x55),  # C_BGREEN
+    (11, 0xFF, 0xFF, 0x55),  # C_BYELLOW
+    (12, 0x55, 0x55, 0xFF),  # C_BBLUE
+    (13, 0xFF, 0x55, 0xFF),  # C_BMAGENTA
+    (14, 0x55, 0xFF, 0xFF),  # C_BCYAN
+    (15, 0xFF, 0xFF, 0xFF),  # C_BWHITE
+]
+
+# glyph ramp, darkest -> brightest.  A cell with no ink stays empty so that
+# sprites keep whatever was drawn under them.
+# Cell luminance -> glyph.  What a terminal can vary inside one cell is only
+# the glyph, so the ramp *is* the shading: dark cells stay black, bright cells
+# get dense ink.  Backgrounds use SCENE, single subjects use SPRITE.
+SCENE_RAMP = [(0.20, " "), (0.32, "."), (0.46, ":"), (0.62, "+"), (1.01, "#")]
+SPRITE_RAMP = [(0.06, " "), (0.18, "."), (0.34, ":"), (0.55, "+"), (1.01, "#")]
+
+
+def shade(v, ramp, max_glyph=None):
+    out = ramp[-1][1]
+    for thr, g in ramp:
+        if v < thr:
+            out = g
+            break
+    if max_glyph is not None:
+        order = [" ", ".", ":", "+", "#"]
+        if order.index(out) > order.index(max_glyph):
+            out = max_glyph
+    return out
+
+# 4x4 ink masks so the preview looks like the real thing
+GLYPH_BITS = {
+    ".": ["0000", "0010", "0000", "0000"],
+    ":": ["0000", "0010", "0000", "0100"],
+    "+": ["0010", "0000", "0100", "0000"],
+    "*": ["1001", "0010", "0100", "1001"],
+    "#": ["1111", "1111", "1111", "1111"],
+    " ": ["0000", "0000", "0000", "0000"],
+}
+
+# name -> (file, cells_w, cells_h, crop box or None, margin %, min luminance)
+SPECS = [
+    # name, file, cells_w, cells_h, crop, margin%, luminance floor, fit, solid
+    ("title",      "title.png",      80, 24, None, 0, 0,  "contain", False, True),
+    ("spr_big",    None,             12, 8,  None, 6, 20, "contain", True, False),
+    ("spr_battle", None,             12, 5,  None, 6, 20, "contain", True, False),
+]
+
+# species order used by the game (see defs.inc / gen_data.py)
+SPECIES = ["charmander", "bulbasaur", "squirtle", "pidgey", "rattata",
+           "oddish", "meowth", "pikachu", "magikarp", "geodude",
+           # evolved forms, in the same order as SPECIES in gen_data.py
+           "charmeleon", "ivysaur", "wartortle", "pidgeotto"]
+
+
+import colorsys
+from collections import Counter
+
+# A terminal has seven hues, all of them primary (0, 30, 60, 120, 180, 240,
+# 300 degrees) and no orange or rose at all.  Measuring the source pixel in HSV
+# and snapping its hue onto one of those, then choosing the dark or the bright
+# member of the family by value, keeps gradients looking like gradients instead
+# of collapsing into one flat red.
+HUES = [(0, 1, 9), (20, 3, 11), (60, 11, 11), (120, 2, 10),
+        (180, 6, 14), (240, 4, 12), (300, 5, 13)]
+
+
+# index -> rgb, for code that needs a colour's actual value
+PAL_RGB = {e[0]: e[1:] for e in PALETTE}
+
+
+def nearest(rgb, _unused=None):
+    r, g, b = [v / 255.0 for v in rgb]
+    h, sat, val = colorsys.rgb_to_hsv(r, g, b)
+    if val < 0.24:
+        return 0, 0                          # keep the darks dark: less noise
+    if sat < 0.25:                           # greys: sky haze, rocks, clouds
+        if val < 0.35:
+            return 8, 0                      # C_GRAY
+        if val < 0.60:
+            return 7, 0                      # C_WHITE (light grey)
+        return 15, 0                         # C_BWHITE
+    if val < 0.34 and sat < 0.90:
+        return 8, 0                          # silhouettes read grey, not blue
+    deg = h * 360.0
+    best, hi, lo = None, None, None
+    for hd, dark, bright in HUES:
+        d = min(abs(deg - hd), 360 - abs(deg - hd))
+        if best is None or d < best:
+            best, hi = d, (bright if val >= 0.80 else dark)
+    return hi, int(best)
+
+
+ss = 2          # samples down each cell (across is always 2*ss)
+BGTOL = 90      # sum-of-|RGB| distance from the corner colour = background
+BG_W, BG_H = 80, 17                  # battle backdrop size in cells
+
+# ---------------------------------------------------------------- tiles -----
+# The overworld tiles are cut out of two generated 4x4 tileset sheets, one
+# block per tile.  A map tile is 2x2 cells, so a whole block is scaled into a
+# 2-cell box; the block is pre-cropped to a 2:1 band first (a cell is twice as
+# tall as it is wide).  `base` composites the subject onto another block --
+# a tree or a flower bed has to stand on grass, not on its white backdrop.
+# Each sheet has its own block grid (the generators do not agree on one) and
+# a thin dark separator line between blocks, hence the inset.
+SHEET_GRID = {"tiles_out.png": (8, 4), "tiles_bld.png": (4, 4),
+              "tiles_in.png": (4, 4)}
+# some sheets do not start at their top-left pixel: tiles_in has a wide margin
+SHEET_ORIGIN = {"tiles_in.png": (291, 0, 794, 768)}
+TILE_INSET = 5                       # pixels dropped at every block edge
+# tile, sheet, block, composite base, forced colour (None = quantise it).
+# The forced colours are the tileset's design: without them a tree and a lawn
+# quantise to the same green and the map turns into one flat texture.
+TILE_SPECS = [
+    (0,  "tiles_out.png", 5,  None, 10, "."),   # 0  grass: walkable, light
+    (1,  "tiles_out.png", 2,  None, 2,  "*"),   # 1  tall grass: you can hide in it
+    (2,  "tiles_out.png", 6,  None, 2,  "*"),   # 2  tree canopy: an obstacle
+    (3,  "tiles_bld.png", 0,  None, 1,  "*"),   # 3  brick wall
+    (4,  "tiles_out.png", 27, None, 7,  ":"),   # 4  stone floor
+    (5,  "tiles_out.png", 12, None, 14, "*"),   # 5  water
+    (6,  "tiles_bld.png", 1,  None, 9,  "*"),   # 6  roof tiles
+    (7,  "tiles_bld.png", 2,  None, 3,  ":"),   # 7  wooden door
+    (8,  "tiles_bld.png", 3,  ("tiles_out.png", 27), 3, ":"),  # 8 shop counter
+    (9,  "tiles_bld.png", 4,  ("tiles_out.png", 5), 3, ":"),   # 9 signboard
+    (10, "tiles_bld.png", 6,  ("tiles_out.png", 5), None, "+"), # 10 POKe BALL
+    (11, "tiles_out.png", 14, ("tiles_out.png", 5), None, "+"), # 11 flower bed
+    (12, "tiles_out.png", 10, None, 3,  ":"),   # 12 dirt path
+    (13, "tiles_bld.png", 6,  ("tiles_out.png", 5), None, "+"), # 13 POKe BALL
+]
+# The indoors set is the same 15 tiles with the room's own blocks swapped in.
+# Interiors are a separate tileset in the real games and they are here too:
+# the map itself says which set to use (map_tilesets in src/data.s).
+TILE_SPECS_IN = [
+    (3,  "tiles_in.png", 2,  None, 7,  "*"),    # wall: plaster + blue wainscot
+    (4,  "tiles_in.png", 0,  None, 3,  ":"),    # floor: wooden planks
+    (8,  "tiles_in.png", 4,  ("tiles_in.png", 0), 3, ":"),   # counter
+    (11, "tiles_in.png", 10, None, 2,  "+"),    # potted plant
+    (12, "tiles_in.png", 9,  None, 7,  ":"),    # striped rug
+    (13, "tiles_in.png", 3,  None, None, "+"),  # healing machine
+    (0,  "tiles_in.png", 1,  None, 7,  "."),    # spare: white tile floor
+    # 13 (TILE_OUT) is deliberately left empty: outside the map stays blank
+]
+N_TILES = 15
+
+
+def content_box(im, tol=BGTOL):
+    """bounding box of everything that is not the corner colour"""
+    px = im.load()
+    w, h = im.size
+    cs = [px[2, 2], px[w - 3, 2], px[2, h - 3], px[w - 3, h - 3]]
+    bg = tuple(sum(c[i] for c in cs) // 4 for i in range(3))
+    x0, y0, x1, y1 = w, h, -1, -1
+    for y in range(h):
+        for x in range(w):
+            r, g, b = px[x, y]
+            if abs(r - bg[0]) + abs(g - bg[1]) + abs(b - bg[2]) > tol:
+                x0, y0 = min(x0, x), min(y0, y)
+                x1, y1 = max(x1, x), max(y1, y)
+    return (x0, y0, x1, y1) if x1 >= 0 else (0, 0, w - 1, h - 1)
+
+
+def hue_of(idx):
+    r, g, b = [v / 255.0 for v in PAL_RGB[idx]]
+    return colorsys.rgb_to_hsv(r, g, b)[0]
+
+
+def tile_feature(counts, total, ground):
+    """A tile is mostly its ground colour, which buries small features --
+    pink flowers in grass, a yellow sign on green.  If a decent slice of the
+    cell is a different hue, that is the thing worth showing, so report it."""
+    best, bestn = ground, counts[ground]
+    for idx, n in counts.items():
+        if idx == ground or n < total * 0.18:
+            continue
+        r, g, b = [v / 255.0 for v in PAL_RGB[idx]]
+        _, sat, val = colorsys.rgb_to_hsv(r, g, b)
+        if sat < 0.3 or val < 0.3:           # pale haze or shadow, not a feature
+            continue
+        d = abs(hue_of(idx) - hue_of(ground))
+        if min(d, 1.0 - d) > 1.0 / 6.0:       # a genuinely different hue
+            # a feature beats the ground even when the ground is commoner --
+            # that is the whole point: a flower bed has to look like flowers
+            if best == ground or n > bestn:
+                best, bestn = idx, n
+    return best
+
+
+def block_rect(im, sheet, idx):
+    """the square block `idx` of `sheet`, grid lines trimmed off"""
+    cols, rows = SHEET_GRID[sheet]
+    ox, oy, ow, oh = SHEET_ORIGIN.get(sheet, (0, 0, im.width, im.height))
+    cw, ch = ow // cols, oh // rows
+    bcx, bcy = idx % cols, idx // cols
+    x, y = ox + bcx * cw, oy + bcy * ch
+    i = TILE_INSET
+    return (x + i, y + i, x + cw - i, y + ch - i)
+
+
+def compose(base_im, base_sheet, base_idx, over_im, over_sheet, over_idx):
+    """paste the subject of one block over another block's background"""
+    b = base_im.crop(block_rect(base_im, base_sheet, base_idx))
+    o = over_im.crop(block_rect(over_im, over_sheet, over_idx)).resize(b.size)
+    op, bp = o.load(), b.load()
+    w, h = b.size
+    cs = [op[2, 2], op[w - 3, 2], op[2, h - 3], op[w - 3, h - 3]]
+    bg = tuple(sum(c[i] for c in cs) // 4 for i in range(3))
+    for y in range(h):
+        for x in range(w):
+            c = op[x, y]
+            if abs(c[0] - bg[0]) + abs(c[1] - bg[1]) + abs(c[2] - bg[2]) > BGTOL:
+                bp[x, y] = c
+    return b
+# Scenery sits behind sprites, so it is kept dark and sparse: few glyphs and
+# a dim colour ramp, otherwise the battle boxes drown in texture.
+BG_RAMP = [(0.28, " "), (0.50, "."), (0.72, ":"), (1.01, "+")]
+# Terrain wants to read as a *texture*, not as sparse dots: a map tile that is
+# mostly blank just looks like a hole in the map.
+TILE_RAMP = [(0.20, " "), (0.36, "."), (0.52, ":"), (0.70, "+"), (1.01, "#")]
+TILE_DIM = 0.85                      # keep the map a shade darker than sprites
+BG_DIM = 0.60
+BACKDROPS = [("bg_field.png", "FIELD"), ("bg_city.png", "TOWN")]
+
+
+def prepare(path, tw, th, crop, margin, minlum, fit="contain", solid=False,
+            absolute_ramp=False, ss=2, sprite_ramp=False, dim=1.0,
+            bg_ramp=False, img=None, no_bg=False, tile_ramp=False,
+            max_glyph=None):
+    """-> (cells_w, cells_h, [(colour index, glyph) ...]) one entry per cell.
+
+    The source is sampled on an `ss`-times finer grid than the cell grid, then
+    each cell looks at its own little block: the block's dominant non-black
+    colour becomes the cell colour and the fraction of lit samples becomes the
+    glyph density.  Quantising per sample (rather than averaging a dithered
+    image first) is what keeps the sunset gradient from collapsing into red.
+    """
+    im = img if img is not None else Image.open(path).convert("RGB")
+    if crop:
+        im = im.crop(crop)
+    # Background: not every generator draws the subject on black (pidgey and
+    # rattata come on white), so take it from the corners instead of assuming.
+    px = im.load()
+    w, h = im.size
+    cs = [px[2, 2], px[w - 3, 2], px[2, h - 3], px[w - 3, h - 3]]
+    bg = tuple(sum(c[i] for c in cs) // 4 for i in range(3))
+    if sum(bg) <= minlum * 3:
+        bg = (0, 0, 0)                    # dark picture: keep the plain floor
+    if no_bg:
+        # a tile is all texture: there is nothing to key out, and every
+        # sample has to count or the tile comes out empty
+        bg = None
+
+    def off_bg(c):
+        if bg is None:
+            return True
+        return abs(c[0] - bg[0]) + abs(c[1] - bg[1]) + abs(c[2] - bg[2]) > BGTOL
+
+    # content box: whatever differs from the background (skipped for tiles,
+    # whose crop is already exact)
+    if bg is None:
+        x0, y0, x1, y1 = 0, 0, w - 1, h - 1
+    else:
+        x0, y0, x1, y1 = w, h, -1, -1
+    if bg is not None:
+        for y in range(h):
+            for x in range(w):
+                if off_bg(px[x, y]):
+                    x0, y0 = min(x0, x), min(y0, y)
+                    x1, y1 = max(x1, x), max(y1, y)
+    if x1 < 0:
+        raise SystemExit("%s has no content above the luminance floor" % path)
+    im = im.crop((x0, y0, x1 + 1, y1 + 1))
+
+    cw, ch = tw, th                       # output size in cells
+    # A terminal cell is about twice as tall as it is wide, so the sampling
+    # grid is 2*ss samples across each cell but only ss down it.  Getting this
+    # wrong squashes every sprite horizontally.
+    sw, sh = cw * ss, ch * ss
+    # A sample is one *glyph* wide and ss-th of a cell tall, and a glyph is
+    # twice as tall as it is wide, so a picture that is A wide:high needs
+    # nw = 2*A*nh samples.  Forgetting that factor is what squashed the
+    # sprites into a couple of columns.
+    aspect = im.width / float(im.height)
+    room = 1 - margin / 100.0
+    if fit == "stretch":
+        # the caller already knows the shape it wants (a map tile is exactly
+        # 2x2 cells); stretching is the point, so skip the aspect maths
+        nw, nh = sw, sh
+    elif fit == "cover":
+        nw = sw
+        nh = max(1, int(sw / (2 * aspect)))
+    else:
+        nw = min(sw * room, sh * room * 2 * aspect)
+        nh = nw / (2 * aspect)
+    nw, nh = max(1, int(nw)), max(1, int(nh))
+    im = im.resize((nw, nh), Image.LANCZOS)
+    canvas = Image.new("RGB", (sw, sh), (0, 0, 0))
+    # `cover` can overflow: keep the top of the picture when it does
+    canvas.paste(im, ((sw - nw) // 2, max(0, (sh - nh) // 2) if nh < sh
+                      else 0))
+    px = canvas.load()
+
+    cells = []
+    for cy in range(ch):
+        for cx in range(cw):
+            counts = {}
+            lums = 0.0
+            n = 0
+            for sy in range(ss):
+                for sx in range(ss):
+                    r, g, b = px[cx * ss + sx, cy * ss + sy]
+                    n += 1
+                    if not off_bg((r, g, b)):
+                        continue          # background: leave the cell empty
+                    if dim != 1.0:
+                        r, g, b = int(r * dim), int(g * dim), int(b * dim)
+                    idx, _ = nearest((r, g, b))
+                    lums += max(r, g, b) / 255.0
+                    if idx:
+                        counts[idx] = counts.get(idx, 0) + 1
+            if not counts:
+                cells.append((0, " "))
+                continue
+            fg = max(counts.items(), key=lambda kv: (kv[1], -kv[0]))[0]
+            if no_bg and len(counts) > 1:
+                fg = tile_feature(counts, sum(counts.values()), fg)
+            if solid:
+                glyph = "#"                # subjects: the colour carries them
+            else:
+                if bg_ramp:
+                    ramp = BG_RAMP
+                elif tile_ramp:
+                    ramp = TILE_RAMP
+                elif sprite_ramp:
+                    ramp = SPRITE_RAMP
+                else:
+                    ramp = SCENE_RAMP
+                glyph = shade(lums / float(n), ramp, max_glyph)
+            cells.append((fg, glyph))
+    return cw, ch, cells
+
+
+def words(cells, cw):
+    """one 32-bit word per screen cell: glyph | (attr << 16); 0 = transparent.
+    This matches fb_cells (glyph bytes) + fb_attr (one byte per cell)."""
+    out = []
+    for col, glyph in cells:
+        if col == 0 or glyph == " ":
+            out.append(0)                      # leave whatever is underneath
+            continue
+        out.append(ord(glyph) | ((col & 0x0f) << 16))
+    return out
+
+
+def preview(cells, cw, ch, path, scale=4):
+    """draw the glyph grid as it will appear on screen"""
+    w, h = cw * scale, ch * scale
+    im = Image.new("RGB", (w, h), (0, 0, 0))
+    px = im.load()
+    for y in range(ch):
+        for x in range(cw):
+            col, glyph = cells[y * cw + x]
+            if col == 0:
+                continue
+            idx, r, g, b = PALETTE[col - 1]
+            bits = GLYPH_BITS.get(glyph, GLYPH_BITS[" "])
+            for by in range(4):
+                for bx in range(4):
+                    if bits[by][bx] == "1":
+                        for dy in range(scale // 4):
+                            for dx in range(scale // 4):
+                                py, pxx = y * scale + by * (scale // 4) + dy, \
+                                    x * scale + bx * (scale // 4) + dx
+                                if 0 <= py < h and 0 <= pxx < w:
+                                    px[pxx, py] = (r, g, b)
+    im = im.resize((w * 2, h * 2), Image.NEAREST)
+    im.save(path)
+    return path
+
+
+def text_preview(cells, cw, ch):
+    out = []
+    for y in range(ch):
+        out.append("".join(cells[y * cw + x][1] for x in range(cw)))
+    return "\n".join(out)
+
+
+def patch_defs(border_idx):
+    """keep the panel border constant in defs.inc in step with the art"""
+    path = os.path.join(ROOT, "src", "defs.inc")
+    if not os.path.exists(path):
+        return
+    src = open(path).read()
+    out = []
+    changed = False
+    for line in src.split("\n"):
+        if line.startswith(".set C_FRAME_BORDER"):
+            new = ".set C_FRAME_BORDER, %d        # from art_src/frame.png" \
+                % border_idx
+            if line != new:
+                changed = True
+            out.append(new)
+        else:
+            out.append(line)
+    if changed:
+        open(path, "w").write("\n".join(out))
+        print("  updated C_FRAME_BORDER in src/defs.inc")
+
+
+def main():
+    global ss
+    if "--ss" in sys.argv:
+        ss = int(sys.argv[sys.argv.index("--ss") + 1])
+    print("  sampling grid: %d samples up, %d across per cell" % (ss, 2 * ss))
+    os.makedirs(OUT, exist_ok=True)
+    os.makedirs(SRC, exist_ok=True)
+
+    defs = []
+    blobs = []
+
+    def add(label, path, tw, th, crop, margin, minlum, header,
+            fit="contain", solid=False, absr=False, sprite_ramp=False, ss=2,
+            dim=1.0, bg_ramp=False, img=None, no_bg=False, tile_ramp=False,
+            max_glyph=None):
+        if not os.path.exists(path):
+            print("  ! missing %s -- skipped" % os.path.basename(path))
+            return None
+        cw, ch, cells = prepare(path, tw, th, crop, margin, minlum, fit, solid,
+                                absr, ss=ss, sprite_ramp=sprite_ramp, dim=dim,
+                                bg_ramp=bg_ramp, img=img, no_bg=no_bg,
+                                tile_ramp=tile_ramp, max_glyph=max_glyph)
+        ws = words(cells, cw)
+        blobs.append((label, ws, tw, th, header))
+        prev = preview(cells, cw, ch, os.path.join(OUT, label + ".png"))
+        print("  %-10s %2dx%-2d cells  %4d words   %s"
+              % (label, tw, th, len(ws), os.path.basename(prev)))
+        print(text_preview(cells, cw, ch))
+        print()
+        return ws
+
+    # ------------------------------------------------------------ title -----
+    for name, fn, tw, th, crop, margin, minlum, fit, solid, absr in SPECS:
+        if name == "title":
+            add("art_title", os.path.join(SRC, fn), tw, th, crop, margin,
+                minlum, "# generated title screen art: 80x24 cells",
+                fit, solid, absr)
+        elif name == "spr_big":
+            for i, sp in enumerate(SPECIES):
+                fn2 = os.path.join(SRC, sp + ".png")
+                add("art_big_%d" % i, fn2, tw, th, None, margin, minlum,
+                    "# %s, big (starter picker)" % sp.upper(), fit, solid, absr,
+                    sprite_ramp=True, ss = ss)
+        elif name == "spr_battle":
+            for i, sp in enumerate(SPECIES):
+                fn2 = os.path.join(SRC, sp + ".png")
+                add("art_sml_%d" % i, fn2, tw, th, None, margin, minlum,
+                    "# %s, battle size" % sp.upper(), fit, solid,
+                    sprite_ramp=True, ss = ss)
+
+    # --------------------------------------------------------- backdrops ----
+    # the battle scene behind the boxes: cover fit so the screen is filled
+    scene = [s for s in SPECS if s[0] == "title"][0]
+    for i, (fn, nm) in enumerate(BACKDROPS):
+        add("art_bg_%d" % i, os.path.join(SRC, fn), BG_W, BG_H, None,
+            scene[5], scene[6], "# battle backdrop: %s, %dx%d cells"
+            % (nm, BG_W, BG_H), "cover", False, False, dim=BG_DIM, bg_ramp=True)
+
+    # ------------------------------------------------------------- tiles ----
+    # one blob per map tile: art_tiles + tile*16 bytes, 2x2 cells, row-major.
+    # Set 0 is the overworld, set 1 the indoors set, and every tile is a blob
+    # of its own -- no tile is shared between the sets.
+    cache = {}
+    tile_set = {0: [None] * N_TILES, 1: [None] * N_TILES}
+
+    def tile_blob(idx, sheet, block, base, force, cap, setno):
+        nonlocal cache
+        if sheet not in cache:
+            cache[sheet] = Image.open(os.path.join(SRC, sheet)).convert("RGB")
+        im = cache[sheet]
+        if base:
+            if base[0] not in cache:
+                cache[base[0]] = Image.open(os.path.join(SRC, base[0])).convert("RGB")
+            im = compose(cache[base[0]], base[0], base[1], im, sheet, block)
+            crop = None
+        else:
+            crop = block_rect(im, sheet, block)
+        # not solid: a tile IS texture, so the glyph ramp has to show through
+        ws = add("art_tile_%d_%d" % (setno, idx), os.path.join(SRC, sheet),
+                 2, 2, crop, 0, 0.08, "# set %d tile %d" % (setno, idx),
+                 "stretch", False, False, img=im, no_bg=True, tile_ramp=True,
+                 ss=3, dim=TILE_DIM, max_glyph=None if cap == "*" else cap)
+        if force is not None:
+            ws = [(w & 0xFF) | (force << 16) if w else 0 for w in ws]
+            blobs[-1] = (blobs[-1][0], ws, blobs[-1][2], blobs[-1][3],
+                         blobs[-1][4])
+        tile_set[setno][idx] = ws
+
+    for spec in TILE_SPECS:
+        tile_blob(spec[0], spec[1], spec[2], spec[3], spec[4], spec[5], 0)
+    tile_set[1] = list(tile_set[0])          # indoors starts as the outdoors set
+    for spec in TILE_SPECS_IN:
+        tile_blob(spec[0], spec[1], spec[2], spec[3], spec[4], spec[5], 1)
+
+    # -------------------------------------------------------------- logo ----
+    add("art_logo", os.path.join(SRC, "logo.png"), 48, 8, None, 2, 0.20,
+        "# generated title logo (POKeMON / FIRE RED wordmark)", "contain",
+        True, False)
+
+    # ------------------------------------------------------------- frame ----
+    # The dialogue panel is too thin for the picture itself (a cell is a whole
+    # character), so take the frame's *palette* off it and let fb_box draw the
+    # panel in those colours.  The interior stays black so text drawn on top
+    # with its own background does not come out spotty.
+    frame_cols = None
+    fp = os.path.join(SRC, "frame.png")
+    if os.path.exists(fp):
+        fi = Image.open(fp).convert("RGB")
+        fx0, fy0, fx1, fy1 = content_box(fi)
+        inner = (fx0 + (fx1 - fx0) // 8, fy0 + (fy1 - fy0) // 6,
+                 fx1 - (fx1 - fx0) // 8, fy1 - (fy1 - fy0) // 6)
+        ins = Counter()
+        for y in range(inner[1], inner[3], 3):
+            for x in range(inner[0], inner[2], 3):
+                ins[fi.getpixel((x, y))] += 1
+        inner_c = ins.most_common(1)[0][0]
+        # the border is the frame's outer ring, so sample close to the edge
+        # and insist on a saturated colour -- otherwise the anti-aliased
+        # shadow rows win and the panel comes out grey
+        ring = max(4, (fx1 - fx0) // 25)
+        bor = Counter()
+        for y in range(fy0 + 2, fy1 - 1):
+            for x in range(fx0 + 2, fx1 - 1):
+                if (fx0 + ring < x < fx1 - ring and
+                        fy0 + ring < y < fy1 - ring):
+                    continue
+                c = fi.getpixel((x, y))
+                r, g, b = [v / 255.0 for v in c]
+                _, sat, val = colorsys.rgb_to_hsv(r, g, b)
+                if sat > 0.35 and val > 0.35:
+                    bor[c] += 1
+        border_c = bor.most_common(1)[0][0] if bor else (255, 255, 255)
+        bidx = nearest(border_c)[0]
+        if bidx >= 9:
+            bidx -= 8          # the bright twin of the same hue reads better dim
+        frame_cols = (bidx, nearest(inner_c)[0])
+        print("  frame.png: border %s -> colour %d, interior %s -> colour %d"
+              % (border_c, frame_cols[0], inner_c, frame_cols[1]))
+
+    # -------------------------------------------------------- emit asm -----
+    n_art = sum(1 for l, _, _, _, _ in blobs if l.startswith("art_big_"))
+    with open(ASM, "w") as fh:
+        fh.write("# ============================================================ art ===\n")
+        fh.write("#  GENERATED by tools/art2cells.py from art_src/*.png -- do not edit.\n")
+        fh.write("#  One word = one cell: glyph | (fg<<16).  Zero = transparent.\n")
+        fh.write("#  Cells are laid out row-major, width x height words.\n")
+        fh.write("# ===========================================================================\n")
+        fh.write(".intel_syntax noprefix\n\n.section .rodata\n")
+        for label, ws, tw, th, header in blobs:
+            fh.write("\n%s\n.globl %s\n%s:\n" % (header, label, label))
+            for i in range(0, len(ws), 10):
+                fh.write("    .long " + ",".join("0x%06x" % w for w in ws[i:i + 10]) + "\n")
+        fh.write("\n# ---- directory -------------------------------------------------\n")
+        fh.write(".globl art_big_w, art_big_h, art_sml_w, art_sml_h\n")
+        fh.write(".globl art_title_w, art_title_h, art_n_species\n")
+        fh.write(".globl art_big_tbl, art_sml_tbl\n")
+        fh.write(".globl art_bg_w, art_bg_h, art_bg_tbl\n")
+        fh.write("art_title_w: .byte %d\n" % (80 if any(l == 'art_title' for l, *_ in blobs) else 0))
+        fh.write("art_title_h: .byte %d\n" % (24 if any(l == 'art_title' for l, *_ in blobs) else 0))
+        fh.write("art_big_w:   .byte 12\nart_big_h:   .byte 8\n")
+        fh.write("art_sml_w:   .byte 12\nart_sml_h:   .byte 5\n")
+        fh.write("art_n_species: .byte %d\n" % n_art)
+        fh.write("\n.section .rodata\n")
+        fh.write("art_big_tbl:\n")
+        for i in range(n_art):
+            fh.write("    .quad art_big_%d\n" % i)
+        fh.write("art_sml_tbl:\n")
+        for i in range(n_art):
+            fh.write("    .quad art_sml_%d\n" % i)
+        fh.write("\n# ---- map tiles: %d words per tile (2x2 cells), one set per\n"
+                 "# tileset: %d words each.  Set 0 is the overworld, set 1 the\n"
+                 "# indoors set -- the map says which one it wants.\n"
+                 % (2 * 2, N_TILES))
+        fh.write(".globl art_tiles, art_tiles_per_set\n")
+        fh.write("art_tiles_per_set: .byte %d\n" % N_TILES)
+        fh.write("art_tiles:\n")
+        for setno in (0, 1):
+            for t in range(N_TILES):
+                ws = tile_set[setno][t] or [0, 0, 0, 0]
+                fh.write("    .long " + ",".join("0x%06x" % x for x in ws) + "\n")
+        n_bg = sum(1 for l, _, _, _, _ in blobs if l.startswith("art_bg_"))
+        if n_bg:
+            fh.write("art_bg_w: .byte %d\nart_bg_h: .byte %d\n" % (BG_W, BG_H))
+            fh.write("art_bg_tbl:\n")
+            for i in range(n_bg):
+                fh.write("    .quad art_bg_%d\n" % i)
+        if frame_cols:
+            fh.write("\n# ---- panel colours lifted from art_src/frame.png -----\n")
+            fh.write(".globl art_frame_border, art_frame_inner\n")
+            fh.write("art_frame_border: .byte %d\n" % frame_cols[0])
+            fh.write("art_frame_inner:  .byte %d\n" % frame_cols[1])
+        fh.write("\n.section .text\n# vim: sw=4 ts=4\n")
+    if frame_cols:
+        patch_defs(frame_cols[0])
+    print("wrote %s (%d words, %d species with art)"
+          % (ASM, sum(len(w) for _, w, _, _, _ in blobs), n_art))
+
+
+if __name__ == "__main__":
+    main()

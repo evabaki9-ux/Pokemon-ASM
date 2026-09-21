@@ -1,0 +1,11 @@
+# build output
+/pokemon
+/build/
+*.o
+
+# saved games and frame dumps
+*.sav
+
+# python caches
+__pycache__/
+*.pyc
