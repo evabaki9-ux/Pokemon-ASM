@@ -195,6 +195,14 @@ stands on grass, the ball on the lawn) and given an explicit colour each — the
 tileset's palette is a design decision, not something to leave to the
 quantiser, or a tree and a lawn end up the same green.
 
+Pictures are drawn as **pixels, not characters**: `blit_art_hb` writes the
+upper-half-block glyph and splits each cell's two colours between foreground
+(top pixel) and background (bottom pixel), so a sprite is 12x16 *square*
+pixels instead of 12x8 fat characters. The converter samples at that doubled
+resolution and packs every cell into `idx | (fg<<16) | (bg<<24)` (1 = two
+colours, 2 = solid, 0 = transparent). Text and the overworld tiles are
+unaffected and share the same framebuffer.
+
 `src/art.s` stores one dword per cell, `glyph | (colour << 16)`, with `0`
 meaning "leave this cell alone". `blit_art` writes those words straight into
 the framebuffer (clipping to 80x24); `art_blit_big`/`art_blit_small` pick the

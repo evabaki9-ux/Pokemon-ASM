@@ -73,7 +73,7 @@ def run_case(case, verbose=False):
         except subprocess.TimeoutExpired:
             return False, ["timed out after %ds" % case.timeout]
     problems = []
-    errtxt = open(err, "rb").read().decode("latin1")
+    errtxt = open(err, "rb").read().decode("utf8", "replace")
     if "SEGV" in errtxt:
         i = errtxt.find("SEGV")
         problems.append("crashed: " + errtxt[i:i + 120].replace("\n", " "))
@@ -82,7 +82,7 @@ def run_case(case, verbose=False):
     if not os.path.exists(dump):
         problems.append("no dump written")
         return False, problems
-    frames = parse_frames(open(dump, "rb").read().decode("latin1"))
+    frames = parse_frames(open(dump, "rb").read().decode("utf8", "replace"))
     if len(frames) < case.want_frames:
         problems.append("only %d dumped frame(s), wanted %d"
                         % (len(frames), case.want_frames))
@@ -119,7 +119,7 @@ CASES = [
     # the art itself (a solid block of '#' where the logo sits) rather than
     # for the words that used to be drawn as text
     Case("title", quick=False, want=[r"ASM EDITION", r"PRESS  START",
-                                     r"hand-written", r"#{20,}"]),
+                                     r"hand-written", r"[\u2580\u2588]{8,}"]),
     Case("starter", quick=False, want_frames=1,
          want=[r"CHARMANDER", r"BULBASAUR", r"SQUIRTLE",
                r"Choose your first partner"]),

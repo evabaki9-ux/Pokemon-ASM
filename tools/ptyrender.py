@@ -92,6 +92,20 @@ def render(sc, path, scale=9):
             if bg:
                 d.rectangle([bx, by, bx + scale - 1, by + scale - 1],
                             fill=RGB[bg & 0x0F])
+            if ch in "\u2580\u2588\u2584":
+                # block glyphs are pixels, not letters: draw them as pixels
+                half = scale // 2
+                fill = RGB[fg & 0x0F]
+                if ch == "\u2580":
+                    d.rectangle([bx, by, bx + scale - 1, by + half - 1],
+                                fill=fill)
+                elif ch == "\u2584":
+                    d.rectangle([bx, by + half, bx + scale - 1, by + scale - 1],
+                                fill=fill)
+                else:
+                    d.rectangle([bx, by, bx + scale - 1, by + scale - 1],
+                                fill=fill)
+                continue
             # 5x7-ish glyph sketch: draw the character itself
             d.text((bx + 1, by + 1), ch, fill=col)
     im = im.resize((im.width * 2, im.height * 2), Image.NEAREST)

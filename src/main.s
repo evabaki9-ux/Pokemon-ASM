@@ -119,21 +119,28 @@ title_frame:
     lea rdx, [rip+art_title]
     movzx ecx, byte ptr [rip+art_title_w]
     movzx r8d, byte ptr [rip+art_title_h]
-    call blit_art
+    call blit_art_hb
     # The wordmark is generated art now (art_logo: POKeMON over FIRE RED).
     # The scene is bright across the middle, so the logo goes in the dark band
     # along the bottom and the smaller labels go in the dark sky at the top.
     mov edi, 16
-    mov esi, 16
+    mov esi, 15
     call draw_logo
+    mov edi, 30
+    mov esi, 13
+    mov edx, 17
+    mov ecx, 1
+    lea r8, [rip+g_block]
+    mov r9d, (C_BLACK<<4)|C_BLACK
+    call fb_fill
     mov edi, 31
-    mov esi, 3
+    mov esi, 13
     lea rdx, [rip+str_title3]
     mov ecx, (C_BLACK<<4)|C_BYELLOW
     call fb_puts
     # credits
     mov edi, 6
-    mov esi, 4
+    mov esi, 22
     lea rdx, [rip+str_copyright]
     mov ecx, (C_BLACK<<4)|C_WHITE
     call fb_puts
@@ -293,7 +300,7 @@ starter_frame:
     push rax
     mov eax, ebx
     imul eax, eax, 26
-    add eax, 11
+    add eax, 5                          # 12 wide in a 22 wide box: centred
     mov edi, eax
     mov esi, 4                          # 8 rows, so the name at y=12 is clear
     pop rdx

@@ -1779,7 +1779,7 @@ bt_draw:
     xor esi, esi
     movzx ecx, byte ptr [rip+art_bg_w]
     movzx r8d, byte ptr [rip+art_bg_h]
-    call blit_art
+    call blit_art_hb
     # ---------------------------------------------------------- enemy info --
     mov edi, 1
     mov esi, 0

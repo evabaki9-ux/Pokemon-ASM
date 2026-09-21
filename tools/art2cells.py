@@ -198,6 +198,84 @@ def content_box(im, tol=BGTOL):
     return (x0, y0, x1, y1) if x1 >= 0 else (0, 0, w - 1, h - 1)
 
 
+def prepare_hb(path, cw, ch, crop=None, margin=0, minlum=0.20,
+               fit="contain", img=None, dim=1.0, no_bg=False):
+    """-> [(idx, fg, bg)] one per cell, half-block style.
+
+    One cell is two square pixels stacked (foreground on top, background
+    below), so the sampling grid is `cw` pixels across and `ch*2` down --
+    square pixels, which is what makes this look like an image instead of
+    characters.  idx 0 = transparent, 1 = 'top half', 2 = 'full block'.
+    """
+    im = img if img is not None else Image.open(path).convert("RGB")
+    if crop:
+        im = im.crop(crop)
+    px = im.load()
+    w, h = im.size
+    cs = [px[2, 2], px[w - 3, 2], px[2, h - 3], px[w - 3, h - 3]]
+    bg = tuple(sum(c[i] for c in cs) // 4 for i in range(3))
+    if sum(bg) <= minlum * 3:
+        bg = (0, 0, 0)
+    if no_bg:
+        bg = None
+
+    def subject(c):
+        if bg is None:
+            return True
+        return abs(c[0] - bg[0]) + abs(c[1] - bg[1]) + abs(c[2] - bg[2]) > BGTOL
+
+    if bg is not None:                      # crop to the subject
+        x0, y0, x1, y1 = w, h, -1, -1
+        for y in range(h):
+            for x in range(w):
+                if subject(px[x, y]):
+                    x0, y0 = min(x0, x), min(y0, y)
+                    x1, y1 = max(x1, x), max(y1, y)
+        if x1 >= 0:
+            im = im.crop((x0, y0, x1 + 1, y1 + 1))
+    sw, sh = cw, ch * 2                     # pixels: square, one per cell across
+    aspect = im.width / float(im.height)
+    room = 1 - margin / 100.0
+    if fit == "cover":
+        nw, nh = sw, max(1, int(sw / aspect))
+    elif fit == "stretch":
+        nw, nh = sw, sh
+    else:
+        nw = min(sw * room, sh * room * aspect)
+        nh = max(1, int(nw / aspect))
+        nw = max(1, int(nw))
+    im = im.resize((nw, nh), Image.LANCZOS)
+    canvas = Image.new("RGB", (sw, sh), (0, 0, 0))
+    ox, oy = (sw - nw) // 2, (sh - nh) // 2
+    canvas.paste(im, (ox, oy))
+    px = canvas.load()
+    cells = []
+    for cy in range(ch):
+        for cx in range(cw):
+            cols, drawn = [], False
+            for half in (0, 1):
+                y = cy * 2 + half
+                if y >= sh:
+                    cols.append(0)
+                    continue
+                c = px[cx, y]
+                if subject(c):
+                    drawn = True
+                    if dim != 1.0:
+                        c = tuple(int(v * dim) for v in c)
+                    cols.append(nearest(c)[0])
+                else:
+                    cols.append(0)          # background reads as black
+            top, bottom = cols
+            if not drawn:
+                cells.append((0, 0, 0))     # nothing here: leave the cell alone
+            elif top == bottom:
+                cells.append((2, top, bottom))
+            else:
+                cells.append((1, top, bottom))
+    return cw, ch, cells
+
+
 def hue_of(idx):
     r, g, b = [v / 255.0 for v in PAL_RGB[idx]]
     return colorsys.rgb_to_hsv(r, g, b)[0]
@@ -256,7 +334,7 @@ BG_RAMP = [(0.28, " "), (0.50, "."), (0.72, ":"), (1.01, "+")]
 # mostly blank just looks like a hole in the map.
 TILE_RAMP = [(0.20, " "), (0.36, "."), (0.52, ":"), (0.70, "+"), (1.01, "#")]
 TILE_DIM = 0.85                      # keep the map a shade darker than sprites
-BG_DIM = 0.60
+BG_DIM = 0.34
 BACKDROPS = [("bg_field.png", "FIELD"), ("bg_city.png", "TOWN")]
 
 
@@ -390,6 +468,42 @@ def words(cells, cw):
     return out
 
 
+def preview_hb(cells, cw, ch, path, scale=6):
+    """draw a half-block blob as it will appear: two pixels per cell"""
+    im = Image.new("RGB", (cw * scale, ch * 2 * scale // 2 * 2), (0, 0, 0))
+    px = im.load()
+    for y in range(ch):
+        for x in range(cw):
+            idx, fg, bg = cells[y * cw + x]
+            if not idx:
+                continue
+            top = PALETTE[fg - 1][1:] if fg else (0, 0, 0)
+            bot = PALETTE[bg - 1][1:] if bg else (0, 0, 0)
+            if idx == 2:
+                bot = top
+            for sy in range(scale):
+                for sx in range(scale):
+                    px[x * scale + sx, y * 2 * scale + sy] = top
+                    px[x * scale + sx, y * 2 * scale + scale + sy] = bot
+    im = im.resize((im.width * 2, im.height * 2), Image.NEAREST)
+    im.save(path)
+    return path
+
+
+def text_preview_hb(cells, cw, ch):
+    out = []
+    for y in range(ch):
+        row = []
+        for x in range(cw):
+            idx, fg, bg = cells[y * cw + x]
+            if not idx:
+                row.append("  ")
+            else:
+                row.append("%x%x" % (fg, bg))
+        out.append("".join(row))
+    return "\n".join(out)
+
+
 def preview(cells, cw, ch, path, scale=4):
     """draw the glyph grid as it will appear on screen"""
     w, h = cw * scale, ch * scale
@@ -476,32 +590,49 @@ def main():
         print()
         return ws
 
+    def add_hb(label, fn, tw, th, crop, margin, minlum, header, fit="contain",
+               dim=1.0, no_bg=False, img=None):
+        """half-block blob: one word per cell, idx|(fg<<16)|(bg<<24)"""
+        if img is None and not os.path.exists(fn):
+            print("  ! missing %s -- skipped" % os.path.basename(fn))
+            return None
+        cw, ch, cells = prepare_hb(fn, tw, th, crop, margin, minlum, fit,
+                                   img=img, dim=dim, no_bg=no_bg)
+        ws = [i | (fg << 16) | (bg << 24) for (i, fg, bg) in cells]
+        blobs.append((label, ws, tw, th, header))
+        prev = preview_hb(cells, cw, ch, os.path.join(OUT, label + ".png"))
+        print("  %-10s %2dx%-2d cells  %4d words   %s"
+              % (label, tw, th, len(ws), os.path.basename(prev)))
+        print(text_preview_hb(cells, cw, ch))
+        print()
+        return ws
+
     # ------------------------------------------------------------ title -----
     for name, fn, tw, th, crop, margin, minlum, fit, solid, absr in SPECS:
         if name == "title":
-            add("art_title", os.path.join(SRC, fn), tw, th, crop, margin,
-                minlum, "# generated title screen art: 80x24 cells",
-                fit, solid, absr)
+            add_hb("art_title", os.path.join(SRC, fn), tw, th, crop, margin,
+                   minlum, "# generated title screen art: 80x24 cells,",
+                   fit, no_bg=True)
         elif name == "spr_big":
             for i, sp in enumerate(SPECIES):
                 fn2 = os.path.join(SRC, sp + ".png")
-                add("art_big_%d" % i, fn2, tw, th, None, margin, minlum,
-                    "# %s, big (starter picker)" % sp.upper(), fit, solid, absr,
-                    sprite_ramp=True, ss = ss)
+                add_hb("art_big_%d" % i, fn2, tw, th, None, margin, minlum,
+                       "# %s, big (starter picker): 12x8 cells = 12x16 pixels"
+                       % sp.upper(), fit)
         elif name == "spr_battle":
             for i, sp in enumerate(SPECIES):
                 fn2 = os.path.join(SRC, sp + ".png")
-                add("art_sml_%d" % i, fn2, tw, th, None, margin, minlum,
-                    "# %s, battle size" % sp.upper(), fit, solid,
-                    sprite_ramp=True, ss = ss)
+                add_hb("art_sml_%d" % i, fn2, tw, th, None, margin, minlum,
+                       "# %s, battle size: 12x5 cells = 12x10 pixels"
+                       % sp.upper(), fit)
 
     # --------------------------------------------------------- backdrops ----
     # the battle scene behind the boxes: cover fit so the screen is filled
     scene = [s for s in SPECS if s[0] == "title"][0]
     for i, (fn, nm) in enumerate(BACKDROPS):
-        add("art_bg_%d" % i, os.path.join(SRC, fn), BG_W, BG_H, None,
-            scene[5], scene[6], "# battle backdrop: %s, %dx%d cells"
-            % (nm, BG_W, BG_H), "cover", False, False, dim=BG_DIM, bg_ramp=True)
+        add_hb("art_bg_%d" % i, os.path.join(SRC, fn), BG_W, BG_H, None,
+               scene[5], scene[6], "# battle backdrop: %s, %dx%d cells"
+               % (nm, BG_W, BG_H), "cover", dim=BG_DIM, no_bg=True)
 
     # ------------------------------------------------------------- tiles ----
     # one blob per map tile: art_tiles + tile*16 bytes, 2x2 cells, row-major.
@@ -540,9 +671,11 @@ def main():
         tile_blob(spec[0], spec[1], spec[2], spec[3], spec[4], spec[5], 1)
 
     # -------------------------------------------------------------- logo ----
-    add("art_logo", os.path.join(SRC, "logo.png"), 48, 8, None, 2, 0.20,
-        "# generated title logo (POKeMON / FIRE RED wordmark)", "contain",
-        True, False)
+    # stretched, not contained: at 48x8 cells a pixel-art wordmark has to use
+    # every one of them or it is unreadable
+    add_hb("art_logo", os.path.join(SRC, "logo.png"), 48, 8, None, 0, 0.20,
+           "# generated title logo (POKeMON / FIRE RED wordmark)", "stretch",
+           no_bg=True)
 
     # ------------------------------------------------------------- frame ----
     # The dialogue panel is too thin for the picture itself (a cell is a whole
@@ -589,7 +722,10 @@ def main():
     with open(ASM, "w") as fh:
         fh.write("# ============================================================ art ===\n")
         fh.write("#  GENERATED by tools/art2cells.py from art_src/*.png -- do not edit.\n")
-        fh.write("#  One word = one cell: glyph | (fg<<16).  Zero = transparent.\n")
+        fh.write("#  One word = one cell.  Two kinds of blob live here:\n"
+                 "#    half block (pictures): idx | (fg<<16) | (bg<<24),\n"
+                 "#      idx 1 = top half, 2 = full block, 0 = transparent\n"
+                 "#    glyph ramp (map tiles): glyph byte | (fg<<16), 0 = transparent\n")
         fh.write("#  Cells are laid out row-major, width x height words.\n")
         fh.write("# ===========================================================================\n")
         fh.write(".intel_syntax noprefix\n\n.section .rodata\n")

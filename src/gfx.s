@@ -52,6 +52,8 @@ s_altscr_off: .asciz "\033[?1049l"
 .globl g_space
 g_space:      .asciz " "
 g_block:      .asciz " "
+# utf8 of the half-block glyphs, 3 bytes each, in index order
+hb_glyphs:    .byte 0xE2,0x96,0x80, 0xE2,0x96,0x88, 0xE2,0x96,0x84
 
 # ---------------------------------------------------------------- helpers ---
 .section .text
@@ -609,7 +611,7 @@ art_blit_big:
     mov rdx, qword ptr [rax+rdx]
     movzx ecx, byte ptr [rip+art_big_w]
     movzx r8d, byte ptr [rip+art_big_h]
-    call blit_art
+    call blit_art_hb
 .Lbg_big_none:
     pop rbx
     ret
@@ -626,8 +628,95 @@ art_blit_small:
     mov rdx, qword ptr [rax+rdx]
     movzx ecx, byte ptr [rip+art_sml_w]
     movzx r8d, byte ptr [rip+art_sml_h]
-    call blit_art
+    call blit_art_hb
 .Lbg_sml_none:
+    pop rbx
+    ret
+
+# ------------------------------------------------------------- half block ---
+# A cell is two square pixels stacked: the foreground colour fills the top
+# half of the cell and the *background* colour the bottom half.  That doubles
+# the vertical resolution and makes the pixels square, which is what turns the
+# art from text into a picture.  One word per cell:
+#     idx | (fg<<16) | (bg<<24)      0 = transparent, 1 = top half, 2 = full
+.globl blit_art_hb
+blit_art_hb:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi                        # x0
+    mov r13d, esi                        # y0
+    mov r14, rdx                         # words
+    mov r15d, ecx                        # width in cells
+    mov ebp, r8d                         # height in cells
+    test r15d, r15d
+    jz .Lhb_done
+    test ebp, ebp
+    jz .Lhb_done
+    xor ebx, ebx                         # row
+.Lhb_row:
+    cmp ebx, ebp
+    jae .Lhb_done
+    mov eax, r13d
+    add eax, ebx
+    test eax, eax
+    js .Lhb_nextrow
+    cmp eax, SCR_H
+    jge .Lhb_done
+    imul edi, eax, SCR_W
+    xor ecx, ecx                         # col
+.Lhb_col:
+    cmp ecx, r15d
+    jae .Lhb_nextrow
+    mov eax, ebx
+    imul eax, r15d
+    add eax, ecx
+    mov edx, dword ptr [r14+rax*4]       # the cell word
+    test dl, dl
+    jz .Lhb_next                         # transparent: leave the cell alone
+    mov esi, r12d
+    add esi, ecx
+    test esi, esi
+    js .Lhb_next
+    cmp esi, SCR_W
+    jge .Lhb_next
+    add esi, edi
+    mov eax, esi
+    shl eax, 2
+    lea r9, [rip+fb_cells]
+    add r9, rax
+    movzx r10d, dl                       # glyph index
+    dec r10d                             # the table is 0-based
+    imul r10d, r10d, 3
+    lea r11, [rip+hb_glyphs]
+    add r11, r10
+    mov eax, dword ptr [r11]             # utf8 for the block, 3 bytes
+    and eax, 0x00FFFFFF                  # a cell is 3 glyph bytes + a NUL
+    mov dword ptr [r9], eax
+    shr edx, 16
+    mov eax, edx
+    and eax, 0x0F                        # fg = the top pixel
+    shr edx, 8
+    and edx, 0x0F                        # bg = the bottom pixel
+    shl edx, 4
+    or eax, edx                          # attr = (bg<<4)|fg
+    lea r9, [rip+fb_attr]
+    mov byte ptr [r9+rsi], al
+.Lhb_next:
+    inc ecx
+    jmp .Lhb_col
+.Lhb_nextrow:
+    inc ebx
+    jmp .Lhb_row
+.Lhb_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
     pop rbx
     ret
 
@@ -672,7 +761,7 @@ draw_logo:
     lea rdx, [rip+art_logo]
     mov ecx, 48
     mov r8d, 8
-    call blit_art
+    call blit_art_hb
     pop rbx
     ret
 
