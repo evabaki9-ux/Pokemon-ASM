@@ -15,6 +15,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHOTS = os.path.join(ROOT, "docs", "shots")
+DOCS = os.path.join(ROOT, "docs")
 OUT = os.path.join(ROOT, "docs", "screens.html")
 
 # (section title, [(shot file, caption)])
@@ -77,8 +78,11 @@ uses, and only pictures that some map can actually draw are emitted at all -- no
 
 
 def data_uri(name):
-    path = os.path.join(SHOTS, name)
-    if not os.path.exists(path):
+    for d in (SHOTS, DOCS, os.path.join(ROOT, "art_src")):
+        path = os.path.join(d, name)
+        if os.path.exists(path):
+            break
+    else:
         return None
     with open(path, "rb") as fh:
         return "data:image/png;base64," + base64.b64encode(fh.read()).decode()

@@ -7,6 +7,9 @@ it talks to are the raw Linux syscalls (`read`, `write`, `open`, `mmap`,
 framebuffer, reads the keyboard in raw mode, and saves to a file.
 
 * static binary, ~130 KB, links against nothing
+* seven maps: PALLET TOWN, ROUTE 1, VIRIDIAN CITY, POKéMON CENTER, ROUTE 2,
+  GRANITE CAVE, RED's HOUSE
+* fourteen species with generated GBA-style art, four of them evolutions
 * Intel syntax (`as .intel_syntax noprefix`), one file per subsystem
 * plays in any 80×24 terminal
 
