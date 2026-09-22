@@ -9,3 +9,6 @@
 # python caches
 __pycache__/
 *.pyc
+/pokemon-gui
+/frontend/assets.bin
+docs/gui/*.bmp

@@ -179,6 +179,23 @@ There is also a crash reporter inside the binary: a SIGSEGV handler prints
 the faulting address, RIP, seven registers and sixteen stack words, so a
 failure in the sandbox is diagnosable without gdb.
 
+## A window too
+
+The same game also builds as a graphical application:
+
+```
+make gui                 # needs SDL2; builds ./pokemon-gui
+./pokemon-gui --scale 2
+```
+
+`pokemon-gui` starts the assembly game on a pseudo terminal, reads the ANSI
+stream it writes, and draws it at **16x16 pixels per cell** instead of one
+character: map tiles from the generated tile art, the battle creatures as
+full-size cut-out pictures on the generated backdrop, the title screen as the
+generated picture, and the interface in the game's own 16 colours with a
+packed bitmap font.  Nothing about the game itself changes -- see
+`docs/GUI.md`, and `docs/gui/*.png` for real frames grabbed without a display.
+
 ## The art
 
 Everything you look at is generated as Game Boy Advance style pixel art and

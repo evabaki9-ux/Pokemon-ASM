@@ -59,6 +59,35 @@ maps:
 screens:
 	python3 tools/make_screens.py
 
+# ------------------------------------------------------------- graphical ----
+# The window front-end: same assembly game, drawn at 16x16 pixels per cell
+# instead of one character.  Needs SDL2 (libsdl2-dev / sdl2-devel / SDL2).
+SDL_CFLAGS := $(shell pkg-config --cflags sdl2 2>/dev/null)
+SDL_LIBS   := $(shell pkg-config --libs sdl2 2>/dev/null)
+
+# the generated art, packed for the front-end (needs python3 + Pillow)
+assets:
+	python3 tools/pack_assets.py
+
+gui: pokemon frontend/assets.bin
+	@if [ -z "$(SDL_LIBS)" ]; then \
+		echo "SDL2 is not installed: apt install libsdl2-dev"; exit 1; fi
+	gcc -O2 -Wall -o pokemon-gui frontend/main.c $(SDL_CFLAGS) $(SDL_LIBS)
+	@echo "built: ./pokemon-gui  (run it, or: ./pokemon-gui --scale 2)"
+
+frontend/assets.bin: tools/pack_assets.py tools/art2cells.py
+	python3 tools/pack_assets.py
+
+# real graphical frames without a display, for the docs
+gui-shots: gui
+	SDL_VIDEODRIVER=dummy ./pokemon-gui --shot docs/gui/title.bmp --no-quickstart
+	SDL_VIDEODRIVER=dummy ./pokemon-gui --shot docs/gui/route1.bmp --scenario shot_route1
+	SDL_VIDEODRIVER=dummy ./pokemon-gui --shot docs/gui/battle.bmp --scenario battle
+	python3 tools/bmp2png.py docs/gui
+
+clean-gui:
+	rm -f pokemon-gui frontend/assets.bin
+
 clean:
 	rm -rf build pokemon src/data.s
 
