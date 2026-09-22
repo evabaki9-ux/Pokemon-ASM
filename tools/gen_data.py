@@ -188,8 +188,12 @@ def house(m, x, y, w=8, dch="D"):
             m[yy][xx] = "R"
     for xx in range(x, x + w):
         m[y + 3][xx] = "R"
-    m[y + 3][x + w // 2] = dch
-    return (x + w // 2, y + 3)
+    door = x + w // 2
+    m[y + 3][door] = dch
+    for xx in range(x, x + w):                  # windows either side of the door
+        if xx != door and xx not in (x, x + w - 1) and m[y + 3][xx] == "R":
+            m[y + 3][xx] = "h"
+    return (door, y + 3)
 
 
 def rows_of(m):
@@ -214,6 +218,11 @@ def build_pallet():
     rect(m, 14, 20, 25, 22, "~")               # pond
     for (x, y) in [(13, 14), (26, 14), (5, 9), (34, 9), (16, 5), (23, 5)]:
         put(m, x, y, "F")
+    put(m, 13, 14, "J")                        # lamps at the crossing
+    put(m, 26, 14, "J")
+    rect(m, 17, 13, 22, 14, "y")               # cobbled forecourt
+    put(m, 18, 15, "B")                        # bushes by the pond
+    put(m, 21, 15, "B")
     put(m, 8, 13, "*")                         # POTION on the grass
     put(m, 21, 2, "$")                         # town sign by the north gate
     put(m, 14, 9, "$")                         # house sign
@@ -245,6 +254,13 @@ def build_route1():
     rect(m, 24, 15, 27, 18, "#")
     for (x, y) in [(5, 3), (34, 3), (17, 24), (22, 33), (11, 18), (28, 18)]:
         put(m, x, y, "F")
+    put(m, 17, 6, "B")                         # bushes lining the route
+    put(m, 22, 6, "B")
+    put(m, 17, 33, "B")
+    put(m, 22, 33, "B")
+    put(m, 6, 20, "J")                         # a lamp at the jog
+    put(m, 33, 20, "J")
+    rect(m, 2, 34, 14, 34, "o")                # the lake's shallow edge
     put(m, 34, 4, "*")                         # POKe BALL
     put(m, 18, 34, "$")                        # route sign
     put(m, 22, 20, "n")                        # YOUNGSTER JOEY (on the path)
@@ -271,6 +287,13 @@ def build_viridian():
     rect(m, 38, 26, 45, 30, ",")
     for (x, y) in [(4, 12), (31, 12), (44, 12), (4, 20), (44, 20)]:
         put(m, x, y, "F")
+    put(m, 4, 12, "J")                         # lamps at the crossings
+    put(m, 31, 12, "J")
+    put(m, 4, 20, "J")
+    rect(m, 23, 13, 29, 15, "y")               # paved forecourt at the CENTER
+    rect(m, 20, 17, 21, 21, "y")               # the crossing itself
+    put(m, 16, 22, "B")                        # bushes along the grass
+    put(m, 42, 22, "B")
     put(m, 8, 14, "*")                         # POTION
     put(m, 22, 28, "$")                        # city sign
     put(m, 17, 12, "N")                        # CENTER GUIDE
@@ -291,6 +314,8 @@ def build_center():
     put(m, 3, 1, "M")
     rect(m, 5, 8, 6, 8, "D")                   # door back outside
     put(m, 3, 4, "N")                          # NURSE
+    put(m, 1, 7, "t")                          # potted plants
+    put(m, 10, 3, "t")
     put(m, 5, 7, "P")                          # arrival tile
     return m
 
@@ -331,6 +356,12 @@ def build_route2():
     rect(m, 24, 3, 35, 5, ",")                  # and above the beach
     put(m, 36, 24, "x")                         # a chest half-buried in sand
     put(m, 18, 7, "*")                          # POKe BALL on the sand
+    rect(m, 19, 9, 36, 9, "o")                  # the shallow edge of the lake
+    rect(m, 19, 10, 19, 23, "o")
+    rect(m, 36, 10, 36, 23, "o")
+    put(m, 17, 14, "B")                         # bushes on the sand
+    put(m, 34, 26, "B")
+    put(m, 27, 6, "J")                          # a lamp at the head of the pier
     put(m, 1, 19, "$")                          # route sign
     put(m, 7, 2, "$")                           # cave sign
     put(m, 17, 8, "$")                          # lake sign
@@ -380,6 +411,8 @@ def build_house():
     rect(m, 3, 4, 5, 5, "g")                    # rug
     rect(m, 1, 5, 2, 5, "C")                    # table
     put(m, 3, 6, "N")                           # MOM
+    put(m, 1, 7, "t")                           # potted plant
+    put(m, 10, 3, "t")
     put(m, 6, 7, "P")                           # arrival tile
     return m
 
@@ -610,7 +643,20 @@ TILES = [
     ("shelf",   "k", "####", [A(C_YELLOW, C_YELLOW)] * 4, 0, 0),
     ("bed",     "E", "####", [A(C_GRAY, C_BCYAN)] * 4, 0, 0),
     ("rug",     "g", "    ", [A(C_MAGENTA, C_BMAGENTA)] * 4, 1, 0),
-    ("out",     "", "    ", [A(C_BLACK, C_BLACK)] * 4, 0, 0),
+    # the tile drawn outside a map's edge.  It used to be blank-on-black, so
+    # a small interior map sat in a sea of nothing; make it the dim field the
+    # real games put round the edges instead
+    ("out",     "", "..:;", [A(C_BLACK, C_GRAY)] * 4, 0, 0),
+    # The rest of the generated sheets: a window on the house fronts, a street
+    # lamp, bushes along the routes, cobbles for the town paving, the shallow
+    # lake edge, and a potted plant for indoors.  All of it is art the games
+    # were cut from but never showed.
+    ("window",  "h", "__||", [A(C_BBLUE, C_BCYAN)] * 4, 0, 0),
+    ("lamp",    "J", "_|||", [A(C_GRAY, C_BYELLOW)] * 4, 0, 0),
+    ("bush",    "B", "####", [A(C_GREEN, C_BGREEN)] * 4, 0, 0),
+    ("cobble",  "y", "::::", [A(C_GRAY, C_BWHITE)] * 4, 1, 0),
+    ("shallow", "o", "~~~~", [A(C_BLUE, C_BCYAN)] * 4, 1, 2),
+    ("plant",   "t", "o  o", [A(C_GREEN, C_BGREEN)] * 4, 0, 0),
 ]
 CHAR2TILE = {t[1]: i for i, t in enumerate(TILES) if t[1]}
 for (name, ch, chars, attrs, walk, enc) in TILES:

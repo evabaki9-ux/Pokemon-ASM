@@ -62,7 +62,8 @@ def shade(v, ramp, max_glyph=None):
             out = g
             break
     if max_glyph is not None:
-        order = [" ", ".", ":", "+", "*", "#"]
+        # density order, and it has to list every glyph a tile may cap to
+        order = [" ", ".", ":", "+", "*", "#", "|", "=", "-"]
         if order.index(out) > order.index(max_glyph):
             out = max_glyph
     return out
@@ -179,8 +180,17 @@ TILE_SPECS = [
     # sets must be the same length, but only set 1 is ever placed
     (19, "tiles_in.png", 5,  None, 7,  "+"),    # PC terminal
     (20, "tiles_in.png", 6,  None, 3,  "+"),    # bookshelf
-    (21, "tiles_in.png", 13, None, 7,  "+"),    # bed
+    (21, "tiles_in.png", 11, None, 3,  "="),    # bed, with the pillow
     (22, "tiles_in.png", 9,  None, 5,  ":"),    # striped rug
+    # the rest of the sheets: the window that goes on the house fronts, a
+    # street lamp, bushes for the routes, cobbles for the town paving, the
+    # shallow lake edge, and a potted plant for indoors
+    (24, "tiles_bld.png", 8,  None, 3,  "#"),    # window
+    (25, "tiles_bld.png", 12, None, 7,  "*"),    # street lamp
+    (26, "tiles_out.png", 4,  None, 7,  "*"),    # bush
+    (27, "tiles_out.png", 26, None, 3,  ":"),    # cobblestone
+    (28, "tiles_out.png", 22, None, 3,  ":"),    # shallow water
+    (29, "tiles_in.png", 10, None, 3,  "+"),     # potted plant
 ]
 # The indoors set is the same 15 tiles with the room's own blocks swapped in.
 # Interiors are a separate tileset in the real games and they are here too:
@@ -198,6 +208,10 @@ TILE_SPECS_IN = [
     (12, "tiles_in.png", 9,  None, 7,  ":"),    # striped rug
     (13, "tiles_in.png", 3,  None, None, "+"),  # healing machine
     (0,  "tiles_in.png", 1,  None, 7,  "."),    # spare: white tile floor
+    (19, "tiles_in.png", 5,  None, 3,  "+"),    # PC: the blue terminal
+    (20, "tiles_in.png", 6,  None, 3,  "#"),    # bookshelf: the books
+    (21, "tiles_in.png", 11, None, 3,  "="),    # bed, in the interior set too
+    (29, "tiles_in.png", 10, None, 3,  "+"),    # potted plant
     # 13 (TILE_OUT) is deliberately left empty: outside the map stays blank
 ]
 # Map tiles: the glyph ramp, not half blocks.  A tile only gets 2x2 cells, so
@@ -206,7 +220,7 @@ TILE_SPECS_IN = [
 # carries texture the pixels cannot, so the world layer stays characters while
 # every picture in the game is drawn with blit_art_hb.  --tiles-px switches it.
 TILES_HB = False
-N_TILES = 23      # 0..22; the 'out' tile is not art
+N_TILES = 30      # 0..29; the 'out' tile (23) is not art
 # tiles whose art is dark enough that the ramp would leave them blank: hold
 # them at this minimum density so the cave floor shows up as stone, not as a
 # hole in the screen
@@ -443,7 +457,7 @@ TILE_PATTERN = {
     6:  (3, "#"),     # roof tiles
     7:  (4, "|"),     # door: planks
     8:  (4, ":"),     # shop counter
-    9:  (4, "#"),     # signboard
+    9:  (2, "|"),     # signboard: a post on grass
     10: (3, "."),     # item
     11: (3, "+"),     # flowers
     12: (3, ":"),     # dirt path
@@ -457,6 +471,12 @@ TILE_PATTERN = {
     20: (4, "#"),     # bookshelf
     21: (3, "="),     # bed
     22: (2, "-"),     # striped rug
+    24: (3, "#"),     # window: panes
+    25: (3, "|"),     # lamp: a post
+    26: (4, ":"),     # bush: leaves, denser than grass
+    27: (3, ":"),     # cobblestone
+    28: (2, ":"),     # shallow water
+    29: (3, "+"),     # potted plant
 }
 # a tile whose art reads dark wants its *dark* colour as the pattern, or the
 # canopy comes out the same green as the grass it stands on
@@ -464,7 +484,23 @@ TILE_DARK = {2: True, 16: True, 17: True}
 # tiles the sampler reads as black but which must not be a hole in the map:
 # pin them to an explicit (base, feature) pair of palette entries instead
 TILE_FORCE = {15: (8, 7),   # cave floor: dark stone under a lighter speckle
-              16: (7, 8)}   # boulder: pale rock, so walls read as rock
+              16: (7, 8),   # boulder: pale rock, so walls read as rock
+              # objects that stand on something: the base is the surface they
+              # stand on and the feature is the object itself, otherwise every
+              # one of them renders as a black hole in the floor or the grass
+              19: (3, 7),   # PC: the pale terminal on floorboards
+              20: (3, 11),  # bookshelf: gold spines on floorboards
+              21: (3, 12),  # bed: the blue blanket on floorboards
+              22: (3, 5),   # rug: magenta stripes on floorboards
+              24: (1, 14),  # window: bright panes in the brick front
+              25: (2, 7),   # lamp: iron post on grass
+              26: (2, 10),  # bush: light leaves on grass
+              9:  (2, 11),  # sign: a yellow board on a post in the grass
+              7:  (8, 3),   # door: a door, in a dark frame
+              27: (7, 8),   # cobblestone: pale stones, dark joins
+              28: (6, 15),  # shallow water: white surf on cyan
+              29: (3, 2),   # potted plant: green leaves on floorboards
+              13: (7, 1)}   # machine/TV: the white console with red trim
 
 
 def dim(idx):

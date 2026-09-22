@@ -1084,7 +1084,8 @@ ow_draw:
     jmp 2f
 1:  lea rcx, [rip+char_to_tile]
     movzx eax, byte ptr [rcx+rax]
-2:  cmp eax, 24
+2:  movzx ecx, byte ptr [rip+n_tiles]     # before: the literal 24
+    cmp eax, ecx
     jb 3f
     push rdi
     push rsi

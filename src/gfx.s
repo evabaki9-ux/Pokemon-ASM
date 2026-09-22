@@ -733,7 +733,11 @@ art_blit_tile:
     push rbx
     cmp edi, 0
     jl .Lbg_tile_none
-    cmp edi, 23
+    # how many tiles the generated table has -- this used to be the literal 23,
+    # so any tile added after that (the window, the lamp, the bushes, the
+    # paving, the shallow water, the plant) was drawn as nothing at all
+    movzx eax, byte ptr [rip+n_tiles]
+    cmp edi, eax
     jae .Lbg_tile_none
     mov r11d, edx                       # keep y: rdx becomes the art pointer
     # the map names its own tileset (outdoors / indoors) and art_tile_map says

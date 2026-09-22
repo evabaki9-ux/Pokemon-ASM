@@ -226,6 +226,20 @@ blades, water is blue, the cave floor is dark stone under a lighter speckle and
 a tree is a canopy of leaves on black: the overworld reads as terrain rather
 than as glyphs on a black screen.
 
+The whole sheet is in use.  Twenty-three tiles came first (terrain, roads,
+buildings, water, signs, the interior set); the rest of the generated art is
+now placed too: a window on every house front, a street lamp, bushes along the
+routes, cobbles for the town paving, the shallow edge of the lake, and a
+potted plant indoors.  `tools/check_maps.py` prints one line per tile with
+where it appears, and a tile the interior set does not override reuses the
+outdoor picture instead of being emitted twice.
+
+Two bugs came out of that pass and are worth remembering: `art_blit_tile` had
+its tile count hard-coded as the literal 23, so every tile added after that was
+drawn as nothing at all (it reads `n_tiles` now), and a tile's colour pair has
+to say what the object *stands on*, not just what it is, or a bed or a bush
+renders as a black hole in the floor.
+
 `docs/screens.html` shows the real screens;
 `python3 tools/make_screens.py` rebuilds that page from `docs/shots/`.
 

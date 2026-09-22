@@ -918,7 +918,7 @@ art_sml_tbl:
 # tile the same way share one copy.  Everything below is
 # reachable; nothing here is art the game never draws.
 .globl art_tiles, art_tiles_per_set, art_tile_map
-art_tiles_per_set: .byte 23
+art_tiles_per_set: .byte 30
 art_tiles:
     # blob 0: set 0 tile 0
     .long 0x20a0023,0x2020020,0x2020020,0x20a0023
@@ -931,9 +931,9 @@ art_tiles:
     # blob 4: set 0 tile 6
     .long 0x1090023,0x1090023,0x1010020,0x1090023
     # blob 5: set 0 tile 7
-    .long 0x08007c,0x08007c,0x08007c,0x08007c
+    .long 0x803007c,0x803007c,0x803007c,0x803007c
     # blob 6: set 0 tile 9
-    .long 0x20a0023,0x20a0023,0x20a0023,0x20a0023
+    .long 0x20b007c,0x2020020,0x2020020,0x20b007c
     # blob 7: set 0 tile 10
     .long 0x20a002e,0x20a002e,0x2020020,0x20a002e
     # blob 8: set 0 tile 11
@@ -951,20 +951,32 @@ art_tiles:
     # blob 14: set 0 tile 18
     .long 0x30b0023,0x30b0023,0x30b0023,0x30b0023
     # blob 15: set 0 tile 19
-    .long 0x40c0023,0x40c0023,0x40c0023,0x40c0023
+    .long 0x3070023,0x3070023,0x3070023,0x3070023
     # blob 16: set 0 tile 21
-    .long 0x08003d,0x08003d,0x000020,0x08003d
+    .long 0x30c003d,0x30c003d,0x3030020,0x30c003d
     # blob 17: set 0 tile 22
-    .long 0x70f002d,0x7070020,0x7070020,0x70f002d
-    # blob 18: set 1 tile 3
+    .long 0x305002d,0x3030020,0x3030020,0x305002d
+    # blob 18: set 0 tile 24
+    .long 0x10e0023,0x10e0023,0x1010020,0x10e0023
+    # blob 19: set 0 tile 25
+    .long 0x207007c,0x207007c,0x2020020,0x207007c
+    # blob 20: set 0 tile 26
+    .long 0x20a003a,0x20a003a,0x20a003a,0x20a003a
+    # blob 21: set 0 tile 27
+    .long 0x708003a,0x708003a,0x7070020,0x708003a
+    # blob 22: set 0 tile 28
+    .long 0x60f003a,0x6060020,0x6060020,0x60f003a
+    # blob 23: set 1 tile 3
     .long 0x70f003a,0x70f003a,0x70f003a,0x70f003a
-    # blob 19: set 1 tile 4
+    # blob 24: set 1 tile 4
     .long 0x30b003a,0x3030020,0x3030020,0x30b003a
-    # blob 20: set 1 tile 13
-    .long 0x70f002e,0x70f002e,0x7070020,0x70f002e
+    # blob 25: set 1 tile 13
+    .long 0x701002e,0x701002e,0x7070020,0x701002e
+    # blob 26: set 1 tile 29
+    .long 0x302002b,0x302002b,0x3030020,0x302002b
 art_tile_map:
-    .byte 0,1,2,255,255,3,4,5,255,6,7,8,9,255,10,11,12,13,14,15,14,16,17
-    .byte 255,255,255,18,19,255,255,5,18,255,255,255,255,20,255,255,255,255,255,15,14,16,17
+    .byte 0,1,2,255,255,3,4,5,255,6,7,8,9,255,10,11,12,13,14,15,14,16,17,255,18,19,20,21,22,255
+    .byte 255,255,255,23,24,255,255,5,23,255,255,255,255,25,255,255,255,255,255,15,14,16,17,255,255,255,255,255,255,26
 art_bg_w: .byte 80
 art_bg_h: .byte 17
 art_bg_tbl:
