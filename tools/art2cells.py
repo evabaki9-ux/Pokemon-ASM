@@ -63,7 +63,7 @@ def shade(v, ramp, max_glyph=None):
             break
     if max_glyph is not None:
         # density order, and it has to list every glyph a tile may cap to
-        order = [" ", ".", ":", "+", "*", "#", "|", "=", "-"]
+        order = [" ", ".", ":", "+", "o", "*", "#", "|", "=", "-"]
         if order.index(out) > order.index(max_glyph):
             out = max_glyph
     return out
@@ -191,6 +191,10 @@ TILE_SPECS = [
     (27, "tiles_out.png", 26, None, 3,  ":"),    # cobblestone
     (28, "tiles_out.png", 22, None, 3,  ":"),    # shallow water
     (29, "tiles_in.png", 10, None, 3,  "+"),     # potted plant
+    (30, "tiles_bld.png", 0,  None, 3,  "#"),    # brick wall
+    (31, "tiles_out.png", 20, None, 3,  "#"),    # cave rock
+    (32, "tiles_bld.png", 5,  ("tiles_out.png", 5), 3, "o"),   # potion bottle
+    (33, "tiles_in.png", 8,  ("tiles_in.png", 0), 3, "+"),     # chair
 ]
 # The indoors set is the same 15 tiles with the room's own blocks swapped in.
 # Interiors are a separate tileset in the real games and they are here too:
@@ -212,6 +216,8 @@ TILE_SPECS_IN = [
     (20, "tiles_in.png", 6,  None, 3,  "#"),    # bookshelf: the books
     (21, "tiles_in.png", 11, None, 3,  "="),    # bed, in the interior set too
     (29, "tiles_in.png", 10, None, 3,  "+"),    # potted plant
+    (33, "tiles_in.png", 8,  ("tiles_in.png", 0), 3, "+"),     # chair
+    (13, "tiles_in.png", 7,  ("tiles_in.png", 0), 3, "="),     # desk: the CENTER
     # 13 (TILE_OUT) is deliberately left empty: outside the map stays blank
 ]
 # Map tiles: the glyph ramp, not half blocks.  A tile only gets 2x2 cells, so
@@ -220,7 +226,7 @@ TILE_SPECS_IN = [
 # carries texture the pixels cannot, so the world layer stays characters while
 # every picture in the game is drawn with blit_art_hb.  --tiles-px switches it.
 TILES_HB = False
-N_TILES = 30      # 0..29; the 'out' tile (23) is not art
+N_TILES = 34      # 0..33; the 'out' tile (23) is not art
 # tiles whose art is dark enough that the ramp would leave them blank: hold
 # them at this minimum density so the cave floor shows up as stone, not as a
 # hole in the screen
@@ -458,7 +464,7 @@ TILE_PATTERN = {
     7:  (4, "|"),     # door: planks
     8:  (4, ":"),     # shop counter
     9:  (2, "|"),     # signboard: a post on grass
-    10: (3, "."),     # item
+    10: (3, "o"),     # item: a ball on the ground
     11: (3, "+"),     # flowers
     12: (3, ":"),     # dirt path
     13: (3, "."),     # ball
@@ -477,6 +483,10 @@ TILE_PATTERN = {
     27: (3, ":"),     # cobblestone
     28: (2, ":"),     # shallow water
     29: (3, "+"),     # potted plant
+    30: (4, "#"),     # brick: courses
+    31: (4, "#"),     # cave rock
+    32: (3, "o"),     # potion bottle
+    33: (2, "+"),     # chair
 }
 # a tile whose art reads dark wants its *dark* colour as the pattern, or the
 # canopy comes out the same green as the grass it stands on
@@ -500,6 +510,14 @@ TILE_FORCE = {15: (8, 7),   # cave floor: dark stone under a lighter speckle
               27: (7, 8),   # cobblestone: pale stones, dark joins
               28: (6, 15),  # shallow water: white surf on cyan
               29: (3, 2),   # potted plant: green leaves on floorboards
+              30: (1, 9),   # brick: dark brick with a lit face
+              31: (8, 7),   # cave rock: dark stone, heavier than the floor
+              32: (2, 9),   # potion: the red bottle on grass
+              33: (3, 7),   # chair: pale wood on floorboards
+              # the ball and the flowers sampled to the grass they sit on, so
+              # both were nearly invisible: give them their own colour
+              10: (2, 15),  # item: the POKe BALL on grass
+              11: (2, 13),  # flowers: pink in the grass
               13: (7, 1)}   # machine/TV: the white console with red trim
 
 

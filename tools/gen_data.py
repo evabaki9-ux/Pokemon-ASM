@@ -187,7 +187,7 @@ def house(m, x, y, w=8, dch="D"):
         for xx in range(x, x + w):
             m[yy][xx] = "R"
     for xx in range(x, x + w):
-        m[y + 3][xx] = "R"
+        m[y + 3][xx] = "z"                       # brick wall under the roof
     door = x + w // 2
     m[y + 3][door] = dch
     for xx in range(x, x + w):                  # windows either side of the door
@@ -223,7 +223,7 @@ def build_pallet():
     rect(m, 17, 13, 22, 14, "y")               # cobbled forecourt
     put(m, 18, 15, "B")                        # bushes by the pond
     put(m, 21, 15, "B")
-    put(m, 8, 13, "*")                         # POTION on the grass
+    put(m, 8, 13, "!")                         # POTION: the bottle art
     put(m, 21, 2, "$")                         # town sign by the north gate
     put(m, 14, 9, "$")                         # house sign
     put(m, 17, 10, "N")                        # PROF. OAK
@@ -294,7 +294,7 @@ def build_viridian():
     rect(m, 20, 17, 21, 21, "y")               # the crossing itself
     put(m, 16, 22, "B")                        # bushes along the grass
     put(m, 42, 22, "B")
-    put(m, 8, 14, "*")                         # POTION
+    put(m, 8, 14, "!")                         # POTION: the bottle art
     put(m, 22, 28, "$")                        # city sign
     put(m, 17, 12, "N")                        # CENTER GUIDE
     put(m, 24, 17, "n")                        # RIVAL on the cross street
@@ -376,13 +376,13 @@ def build_route2():
 # hiker has made a camp in the corner (PC, shelf, bedroll, rug, chest).
 def build_cave():
     m = M(16, 12, "r")
-    rect(m, 0, 0, 15, 0, "b")
-    rect(m, 0, 11, 15, 11, "b")
-    rect(m, 0, 0, 0, 11, "b")
-    rect(m, 15, 0, 15, 11, "b")
+    rect(m, 0, 0, 15, 0, "X")
+    rect(m, 0, 11, 15, 11, "X")
+    rect(m, 0, 0, 0, 11, "X")
+    rect(m, 15, 0, 15, 11, "X")
     put(m, 4, 11, "D")                          # back out to ROUTE 2
     rect(m, 7, 3, 9, 4, "b")                    # boulder cluster
-    rect(m, 11, 2, 13, 3, "b")
+    rect(m, 11, 2, 13, 3, "X")
     rect(m, 6, 8, 10, 8, "s")                   # a sandy patch on the floor
     put(m, 13, 7, "x")                          # a chest in the dark
     put(m, 7, 9, "g")                           # the camp's rug
@@ -410,6 +410,9 @@ def build_house():
     rect(m, 8, 4, 9, 6, "E")                    # bed
     rect(m, 3, 4, 5, 5, "g")                    # rug
     rect(m, 1, 5, 2, 5, "C")                    # table
+    put(m, 1, 4, "q")                           # chairs at the table
+    put(m, 2, 4, "q")
+    put(m, 4, 3, "q")
     put(m, 3, 6, "N")                           # MOM
     put(m, 1, 7, "t")                           # potted plant
     put(m, 10, 3, "t")
@@ -657,6 +660,12 @@ TILES = [
     ("cobble",  "y", "::::", [A(C_GRAY, C_BWHITE)] * 4, 1, 0),
     ("shallow", "o", "~~~~", [A(C_BLUE, C_BCYAN)] * 4, 1, 2),
     ("plant",   "t", "o  o", [A(C_GREEN, C_BGREEN)] * 4, 0, 0),
+    # and the last of the sheets: the brick the houses are built of, the dark
+    # rock the cave is cut through, the potion bottle, and a chair
+    ("brick",   "z", "####", [A(C_RED, C_BRED)] * 4, 0, 0),
+    ("cave",    "X", "####", [A(C_GRAY, C_BWHITE)] * 4, 0, 0),
+    ("potion",  "!", "o  o", [A(C_GREEN, C_BRED)] * 4, 0, 0),
+    ("chair",   "q", "_|||", [A(C_YELLOW, C_BYELLOW)] * 4, 0, 0),
 ]
 CHAR2TILE = {t[1]: i for i, t in enumerate(TILES) if t[1]}
 for (name, ch, chars, attrs, walk, enc) in TILES:
@@ -781,7 +790,7 @@ for i, mp in enumerate(MAPS):
                 die("map %s: npc glyph at %d,%d has no npc entry" % (mp["name"], x, y))
             if c == "$" and not any((e[0], e[1]) == (x, y) for e in mp["signs"]):
                 die("map %s: sign glyph at %d,%d has no sign entry" % (mp["name"], x, y))
-            if c == "*" and not any((e[0], e[1]) == (x, y) for e in mp["items"]):
+            if c in "*!" and not any((e[0], e[1]) == (x, y) for e in mp["items"]):
                 die("map %s: item glyph at %d,%d has no item entry" % (mp["name"], x, y))
     if spawn is None:
         if i == 0:

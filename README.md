@@ -226,11 +226,13 @@ blades, water is blue, the cave floor is dark stone under a lighter speckle and
 a tree is a canopy of leaves on black: the overworld reads as terrain rather
 than as glyphs on a black screen.
 
-The whole sheet is in use.  Twenty-three tiles came first (terrain, roads,
-buildings, water, signs, the interior set); the rest of the generated art is
-now placed too: a window on every house front, a street lamp, bushes along the
-routes, cobbles for the town paving, the shallow edge of the lake, and a
-potted plant indoors.  `tools/check_maps.py` prints one line per tile with
+The whole sheet is in use.  Thirty-three tiles are placed (terrain, roads,
+water, rock, signs, and the interior set), and the last of the generated art
+went in with them: brick for the house walls, dark rock for GRANITE CAVE, the
+potion bottle on POTION items, windows on the house fronts, a street lamp,
+bushes along the routes, cobbles for the town paving, the shallow edge of the
+lake, and indoors a potted plant, chairs at the table and the desk in the
+POKeMON CENTER.  `tools/check_maps.py` prints one line per tile with
 where it appears, and a tile the interior set does not override reuses the
 outdoor picture instead of being emitted twice.
 

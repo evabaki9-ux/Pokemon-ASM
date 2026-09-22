@@ -429,16 +429,36 @@ tile_defs:
     .quad g_c32
     .quad g_c111
     .byte 42,42,42,42,0,0,0,0
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .byte 25,25,25,25,0,0,0,0
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .quad g_c35
+    .byte 127,127,127,127,0,0,0,0
+    .quad g_c111
+    .quad g_c32
+    .quad g_c32
+    .quad g_c111
+    .byte 41,41,41,41,0,0,0,0
+    .quad g_c95
+    .quad g_c124
+    .quad g_c124
+    .quad g_c124
+    .byte 59,59,59,59,0,0,0,0
 
 .globl n_tiles
 .globl n_tiles
-n_tiles: .byte 30
+n_tiles: .byte 34
 
 .globl char_to_tile
 .globl char_to_tile
 char_to_tile:
-    .byte 29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,29,2,9,29,29,29,29,29,10,29,1,29,0,29,29,29,29,29,29,29,29,29,29,29,12,29,29,29,29,29
-    .byte 29,29,26,8,7,21,11,29,29,29,25,29,4,13,29,29,29,29,6,29,29,29,29,3,29,29,29,29,29,29,29,29,29,29,16,29,29,29,17,22,24,29,29,20,29,29,29,28,19,29,15,14,29,29,29,29,18,27,29,29,29,29,5,29
+    .byte 33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,33,32,33,2,9,33,33,33,33,33,10,33,1,33,0,33,33,33,33,33,33,33,33,33,33,33,12,33,33,33,33,33
+    .byte 33,33,26,8,7,21,11,33,33,33,25,33,4,13,33,33,33,33,6,33,33,33,33,3,31,33,33,33,33,33,33,33,33,33,16,33,33,33,17,22,24,33,33,20,33,33,33,28,19,33,15,14,29,33,33,33,18,27,30,33,33,33,5,33
 
 # ----------------------------------------------------- entity sprites ---
 .globl ent_sprite_defs
@@ -526,13 +546,13 @@ map0_tiles:
     .ascii "#.....RRRRRRRR.....::.....RRRRRRRR.....#"
     .ascii "#.....RRRRRRRR..F..::..F..RRRRRRRR.....#"
     .ascii "#.....RRRRRRRR.....::.....RRRRRRRR.....#"
-    .ascii "#.....RhhhDhhR.....::.....RhhhDhhR.....#"
+    .ascii "#.....zzzzDzzz.....::.....zzzzDzzz.....#"
     .ascii "#..................::..................#"
     .ascii "#....F........$....::.............F....#"
     .ascii "#...................:..................#"
     .ascii "#.........:::::::::::::::::::::........#"
     .ascii "#.........:::::::::::::::::::::........#"
-    .ascii "#.......*........yyyyyy................#"
+    .ascii "#.......!........yyyyyy................#"
     .ascii "#............J...yyyyyy...J............#"
     .ascii "#.,,,,,,,,........B::B........,,,,,,,,.#"
     .ascii "#.,,,,,,,,.........::.........,,,,,,,,.#"
@@ -700,13 +720,13 @@ map2_tiles:
     .ascii "#.......RRRRRRRR...::.........~~~~~~~~~~~R.....#"
     .ascii "#.......RRRRRRRR...::.........~~~~~~~~~~~R.....#"
     .ascii "#.......RRRRRRRR...::.............RRRRRRRR.....#"
-    .ascii "#.......RhhhDhhR...::.............RhhhDhhR.....#"
+    .ascii "#.......zzzzDzzz...::.............zzzzDzzz.....#"
     .ascii "#..................::.RRRRRRRR.................#"
     .ascii "#..................::.RRRRRRRR.................#"
     .ascii "#..................::.RRRRRRRR.................#"
-    .ascii "#...J..............::.RhhhDhhR.J............F..#"
+    .ascii "#...J..............::.zzzzDzzz.J............F..#"
     .ascii "#..................::..yyyyyyy.................#"
-    .ascii "#.......*..........::..yyyyyyy.................#"
+    .ascii "#.......!..........::..yyyyyyy.................#"
     .ascii "#..................::..yyyyyyy.................#"
     .ascii "#.....::::::::::::::::::::::::::::::::::::.....#"
     .ascii "#.....::::::::::::::yy::::::::::::::::::::.....#"
@@ -716,7 +736,7 @@ map2_tiles:
     .ascii "#..................:yy........RRRRRRRR.........#"
     .ascii "#...............B..::.........RRRRRRRR....B....#"
     .ascii "#..................::.........RRRRRRRR.........#"
-    .ascii "#..................::.........RhhhDhhR.........#"
+    .ascii "#..................::.........zzzzDzzz.........#"
     .ascii "#..................::..........................#"
     .ascii "#.,,,,,,,,,........::.................,,,,,,,,.#"
     .ascii "#.,,,,,,,,,........::.................,,,,,,,,.#"
@@ -931,18 +951,18 @@ str_item_map4_items_18_7: .asciz "\fYou found a\nPOKe BALL!\fIt went into\nyour 
 map5_name: .asciz "GRANITE CAVE"
 .globl map5_tiles
 map5_tiles:
-    .ascii "bbbbbbbbbbbbbbbb"
-    .ascii "brrrrrrrrrrrrrrb"
-    .ascii "bpkrrrrrrrrbbbrb"
-    .ascii "brrrrrrbbbrbbbrb"
-    .ascii "brrrrrrbbbrrrrrb"
-    .ascii "brrrrrrrrrrrrrrb"
-    .ascii "brrrrrrrrrrrrrrb"
-    .ascii "brrrrrrrrrrrrxrb"
-    .ascii "brrrrrsssssrrrrb"
-    .ascii "bErrrrrgrrrrrrrb"
-    .ascii "brrrrrrrrrrrrrrb"
-    .ascii "bbbbDbbbbbbbbbbb"
+    .ascii "XXXXXXXXXXXXXXXX"
+    .ascii "XrrrrrrrrrrrrrrX"
+    .ascii "XpkrrrrrrrrXXXrX"
+    .ascii "XrrrrrrbbbrXXXrX"
+    .ascii "XrrrrrrbbbrrrrrX"
+    .ascii "XrrrrrrrrrrrrrrX"
+    .ascii "XrrrrrrrrrrrrrrX"
+    .ascii "XrrrrrrrrrrrrxrX"
+    .ascii "XrrrrrsssssrrrrX"
+    .ascii "XErrrrrgrrrrrrrX"
+    .ascii "XrrrrrrrrrrrrrrX"
+    .ascii "XXXXDXXXXXXXXXXX"
     .byte 0
 .globl map5_npcs
 map5_npcs:
@@ -988,8 +1008,8 @@ map6_tiles:
     .ascii "WWWWWWWWWWWW"
     .ascii "WpkkLLLLLMMW"
     .ascii "WLLLLLLLLLLW"
-    .ascii "WLLLLLLLLLtW"
-    .ascii "WLLgggLLEELW"
+    .ascii "WLLLqLLLLLtW"
+    .ascii "WqqgggLLEELW"
     .ascii "WCCgggLLEELW"
     .ascii "WLLLLLLLEELW"
     .ascii "WtLLLLLLLLLW"
