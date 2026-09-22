@@ -24,6 +24,7 @@ opt_quick: .byte 0
 .globl save_blk, save_end, party
 .globl p_map, p_x, p_y, p_dir, party_n, bag_potion, bag_ball, flags, money
 .globl dex_seen, dex_caught, map_items, rival_pick, back_map, back_x, back_y
+.globl p_scr_x, p_scr_y
 save_blk:
 p_map:        .byte 0
 p_x:          .byte 0
@@ -45,6 +46,9 @@ back_y:       .byte 0
 pad1:         .byte 0
 party:        .skip (6*M_SZ)
 save_end:
+# not part of the save: where the player was last blitted, for --gfx frames
+p_scr_x:      .byte 0
+p_scr_y:      .byte 0
 
 .align 16
 # ------------------------------------------------------------- live state ---
@@ -101,6 +105,13 @@ _start:
     jz 1f
     mov edi, 1
     call set_headless
+    jmp .Largnext
+1:  mov rdi, qword ptr [r13+rbx*8]
+    lea rsi, [rip+a_gfx]
+    call str_eq
+    test eax, eax
+    jz 1f
+    mov qword ptr [rip+g_gfx], 1
     jmp .Largnext
 1:  mov rdi, qword ptr [r13+rbx*8]
     lea rsi, [rip+a_script]
@@ -292,9 +303,13 @@ mon_set_level:
 # first-boot defaults for fields that live in .bss
 boot_defaults:
     mov word ptr [rip+money], 3000
+    mov byte ptr [rip+p_scr_x], 0xff
+    mov byte ptr [rip+p_scr_y], 0xff
     ret
 
 a_headless: .asciz "--headless"
+a_gfx:      .asciz "--gfx"
+
 a_fast:     .asciz "--fast"
 a_quick:    .asciz "--quickstart"
 a_trace:    .asciz "--trace"

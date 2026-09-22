@@ -825,6 +825,8 @@ ow_draw_ents:
     add rbx, ENT_SZ
     jmp .Lde_loop
 .Lde_player:
+    mov byte ptr [rip+p_scr_x], 0xff     # off screen until we know better
+    mov byte ptr [rip+p_scr_y], 0xff
     movsx eax, word ptr [rip+cam_x]
     movzx ecx, byte ptr [rip+p_x]
     sub ecx, eax
@@ -840,6 +842,8 @@ ow_draw_ents:
     jae .Lde_done
     shl edx, 1
     add edx, VIEW_PY
+    mov byte ptr [rip+p_scr_x], cl       # where the frame header reports him
+    mov byte ptr [rip+p_scr_y], dl
     mov edi, ecx
     mov esi, edx
     xor edx, edx                         # sprite 0 = the player

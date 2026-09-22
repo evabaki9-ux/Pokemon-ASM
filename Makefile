@@ -85,6 +85,9 @@ gui-shots: gui
 	SDL_VIDEODRIVER=dummy ./pokemon-gui --shot docs/gui/battle.bmp --scenario battle
 	python3 tools/bmp2png.py docs/gui
 
+gui-tour: gui-shots
+	python3 tools/gui_tour.py
+
 clean-gui:
 	rm -f pokemon-gui frontend/assets.bin
 
@@ -95,4 +98,4 @@ size: pokemon
 	@size pokemon
 	@nm pokemon | sort | tail -20
 
-.PHONY: all test demo tour art maps screens clean size
+.PHONY: all test demo tour art maps screens clean size gui assets gui-shots gui-tour

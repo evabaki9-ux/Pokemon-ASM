@@ -22,6 +22,12 @@ game's own 16 colours here, at build time, and written as one byte per pixel:
         u8  name_len, char name[]
         u8  px[96*96]
     for each backdrop: u8 px[screen_w*screen_h]
+    u32 n_walkers
+    for each walker (a person: the game draws those as 2x2 blocks of glyphs):
+        u8 glyphs[4]                       the block to recognise on the map
+        u8 attrs[4]
+        u8 n_frames                        the player has one per direction
+        u8 px[32x40] * n_frames
 
 Everything is little-endian and packed with no padding, so the C side can
 walk it with a cursor.
@@ -33,7 +39,7 @@ import re
 import struct
 import sys
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
@@ -44,11 +50,16 @@ OUT = os.path.join(ROOT, "frontend", "assets.bin")
 CELL_W, CELL_H = 16, 16                                  # one terminal cell
 TILE_PX = 2 * CELL_W                                     # a map tile is 2x2 cells
 SPECIES_PX = 96
+WALKER_W, WALKER_H = 32, 40       # a person: one tile wide, a bit taller
 FONT_W, FONT_H = 8, 16
 FONT_FILES = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
 ]
+
+
+def getenv_dbg():
+    return os.environ.get("PACK_DEBUG")
 
 
 def die(msg):
@@ -131,6 +142,44 @@ def quantise(im, size, transparent=False):
     return bytes(out)
 
 
+def species_cutout_from_image(im, size):
+    """species_cutout, for an image already in memory.
+
+    `size` is one number for a square, or a (width, height) pair."""
+    size_w, size_h = (size, size) if isinstance(size, int) else size
+    w, h = im.size
+    px = im.load()
+    edge = {}
+    for x in range(w):
+        for y in (0, h - 1):
+            edge[px[x, y]] = edge.get(px[x, y], 0) + 1
+    for y in range(h):
+        for x in (0, w - 1):
+            edge[px[x, y]] = edge.get(px[x, y], 0) + 1
+    bg = max(edge.items(), key=lambda kv: kv[1])[0]
+
+    mask = Image.new("L", (w, h), 0)
+    mp = mask.load()
+    for y in range(h):
+        for x in range(w):
+            c = px[x, y]
+            if abs(c[0] - bg[0]) + abs(c[1] - bg[1]) + abs(c[2] - bg[2]) > 60:
+                mp[x, y] = 255
+    box = mask.getbbox()
+    if not box:
+        box = (0, 0, w, h)
+    im = im.crop(box)
+
+    room_w, room_h = size_w - 2, size_h - 2
+    r = min(room_w / float(im.width), room_h / float(im.height))
+    im = im.resize((max(1, int(im.width * r)), max(1, int(im.height * r))),
+                   Image.NEAREST)
+    canvas = Image.new("RGB", (size_w, size_h), bg)
+    # people stand on the ground: sit them on the bottom of the block
+    canvas.paste(im, ((size_w - im.width) // 2, size_h - im.height))
+    return quantise_cutout(canvas, tol=170)
+
+
 def species_cutout(path, size):
     """A creature picture, cut out and scaled to fill `size`.
 
@@ -172,7 +221,7 @@ def species_cutout(path, size):
     return quantise_cutout(canvas)
 
 
-def quantise_cutout(im):
+def quantise_cutout(im, tol=70):
     """A creature picture on a transparent background.
 
     The generated PNGs are drawn on a flat light background.  In the terminal
@@ -182,11 +231,19 @@ def quantise_cutout(im):
     w, h = im.size
     corners = [px[2, 2], px[w - 3, 2], px[2, h - 3], px[w - 3, h - 3]]
     bg = tuple(sum(c[i] for c in corners) // 4 for i in range(3))
+    # A magenta backdrop (what the people and creatures are drawn on) leaves
+    # purple fringes along every outline once the picture is scaled down and
+    # squeezed into sixteen colours.  Where the backdrop is that saturated,
+    # drop anything that still smells of it, however dark the blend.
+    magenta = bg[0] > 140 and bg[2] > 140 and bg[1] < 110
     out = bytearray()
     for y in range(h):
         for x in range(w):
             c = px[x, y]
-            if abs(c[0] - bg[0]) + abs(c[1] - bg[1]) + abs(c[2] - bg[2]) < 70:
+            if abs(c[0] - bg[0]) + abs(c[1] - bg[1]) + abs(c[2] - bg[2]) < tol:
+                out.append(255)
+            elif magenta and c[0] > 90 and c[2] > 90 and \
+                    c[1] < 0.55 * min(c[0], c[2]):
                 out.append(255)
             else:
                 out.append(A.nearest(c)[0])
@@ -313,6 +370,38 @@ def font_bitmap():
     return bytes(out)
 
 
+def walker_signatures():
+    """The 2x2 glyph blocks the game draws people with: ent_sprite_defs.
+
+    Read straight out of src/data.s so the front-end can never drift from the
+    game -- if a sprite is added there, this picks it up."""
+    src = open(os.path.join(ROOT, "src", "data.s")).read()
+    chars = dict((int(n), c) for n, c in
+                 re.findall(r'g_c(\d+):\s*\.asciz\s+"(.)"', src))
+    m = re.search(r"ent_sprite_defs:\n(.*?)\n\.globl n_ent_sprites", src, re.S)
+    if not m:
+        die("cannot find ent_sprite_defs in src/data.s")
+    body = m.group(1)
+    sigs = []
+    for quad, attr in re.findall(
+            r"((?:\s*\.quad g_c\d+\n){4})((?:\s*\.byte [0-9,]+\n)+)", body):
+        glyphs = [chars[int(n)] for n in re.findall(r"g_c(\d+)", quad)]
+        attrs = [int(v) for v in re.findall(r"\d+", attr)][:4]
+        sigs.append((glyphs, attrs))
+    return sigs
+
+
+# Which picture each of those blocks becomes.  Keyed by the first glyph of the
+# block: '@' is the player (four directions: down, up, left, right), 'o' the
+# villagers.  Right is the left picture mirrored.
+WALKER_ART = {
+    "@": ("hero", ["hero_down.png", "hero_up.png", "hero_side.png",
+                   "mirror:hero_side.png"]),
+    "o": ("villager", ["npc_girl.png"]),
+    "#": ("villager2", ["npc_boy.png"]),
+}
+
+
 def species_list():
     sys.path.insert(0, os.path.join(ROOT, "tools"))
     import gen_data                                       # noqa: E402
@@ -404,11 +493,61 @@ def main():
             for x in range(w):
                 u8(A.nearest(px[x, y])[0])
 
+    # ---- walkers ----------------------------------------------------------
+    # The people on the map.  The game draws the player and the NPCs as 2x2
+    # blocks of characters (a hat, a body, legs); each block below is replaced
+    # by a real sprite, and the player gets one picture per direction.
+    sigs = walker_signatures()
+    walkers = []
+    for glyphs, attrs in sigs:
+        art = WALKER_ART.get(glyphs[0])
+        if not art:
+            continue
+        name, files = art
+        frames = []
+        for f in files:
+            mirror = f.startswith("mirror:")
+            path = os.path.join(ROOT, "art_src", f.split(":", 1)[-1])
+            if not os.path.exists(path):
+                die("missing walker art %s" % path)
+            im = Image.open(path).convert("RGB")
+            if mirror:
+                im = ImageOps.mirror(im)
+            frames.append(species_cutout_from_image(im, (WALKER_W, WALKER_H)))
+        if any(w[0] == glyphs for w in walkers):
+            continue                                 # same look, one entry
+        walkers.append((glyphs, attrs, name, frames))
+        if getenv_dbg():
+            print("  walker %-10s %s" % (name, "".join(glyphs)))
+
+    # a tile that happens to look like a person would be a bug worth knowing
+    for setno in (0, 1):
+        for t in range(per_set):
+            words = table.get((setno, t))
+            if not words:
+                continue
+            tw = [chr(w & 0xff) for w in words[:4]]
+            for glyphs, attrs, name, frames in walkers:
+                if tw == glyphs:
+                    die("tile %d/%d collides with walker %s" % (setno, t, name))
+
+    u32(len(walkers))
+    for glyphs, attrs, name, frames in walkers:
+        for g in glyphs:
+            u8(ord(g))
+        for a in attrs:
+            u8(a)
+        u8(len(frames))
+        for f in frames:
+            body.extend(f)
+
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "wb") as fh:
         fh.write(body)
-    print("wrote %s: %d tile pictures, %d species, 3 full screen pictures, %d bytes"
-          % (os.path.relpath(OUT, ROOT), n_pictures, len(species), len(body)))
+    print("wrote %s: %d tile pictures, %d species, %d people, "
+          "3 full screen pictures, %d bytes"
+          % (os.path.relpath(OUT, ROOT), n_pictures, len(species),
+             len(walkers), len(body)))
 
 
 if __name__ == "__main__":

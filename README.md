@@ -181,20 +181,29 @@ failure in the sandbox is diagnosable without gdb.
 
 ## A window too
 
-The same game also builds as a graphical application:
+The same game also builds as a graphical application, and there is no terminal
+anywhere in that path:
 
 ```
 make gui                 # needs SDL2; builds ./pokemon-gui
 ./pokemon-gui --scale 2
 ```
 
-`pokemon-gui` starts the assembly game on a pseudo terminal, reads the ANSI
-stream it writes, and draws it at **16x16 pixels per cell** instead of one
-character: map tiles from the generated tile art, the battle creatures as
-full-size cut-out pictures on the generated backdrop, the title screen as the
-generated picture, and the interface in the game's own 16 colours with a
-packed bitmap font.  Nothing about the game itself changes -- see
-`docs/GUI.md`, and `docs/gui/*.png` for real frames grabbed without a display.
+`./pokemon --gfx` swaps its ANSI writer for a 3850-byte binary frame straight
+out of the framebuffer -- the magic `PKF1`, where the player is, and a glyph and
+a colour for every one of the 3840 cells -- and `pokemon-gui` draws that at
+**16x16 pixels per cell**: map tiles from the generated tile art, the people of
+the world as sprites (the player has one picture per direction, taken from the
+frame header), the battle creatures as full-size cut-out pictures on the
+generated backdrop, the title screen as the generated picture, and the interface
+in the game's own 16 colours with a packed bitmap font.  Screen changes flash
+and wipe, the way a game does it.
+
+Nothing about the game itself changed: it is still the same static, libc-free
+assembly binary, the terminal build is still the default `make`, and the test
+suite still drives the real binary through its text path.  See `docs/GUI.md` for
+the protocol and the test hooks, and `docs/gui/tour.png` for the three screens
+grabbed without a display.
 
 ## The art
 
@@ -221,6 +230,20 @@ art_src/frame.png       ->           art_frame_border / art_frame_inner
 art_src/tiles_out.png   ->           art_tiles     terrain sheet, spare pictures dropped
 art_src/tiles_bld.png   ->           art_tiles     buildings and objects
 art_src/tiles_in.png    ->           art_tiles     interior set (rooms, furniture)
+```
+
+The people of the world are generated too.  In the terminal build a person is
+just four characters (`@`, `@`, `|`, `|` with a colour each -- `ent_sprite_defs`
+in `src/data.s`); the window build recognises that block of characters anywhere
+on the map and draws a sprite instead, and the player has one picture per
+direction:
+
+```
+art_src/hero_down.png   -> frontend/assets.bin   the player, facing you
+art_src/hero_up.png     ->                       the player, from behind
+art_src/hero_side.png   ->                       the player in profile (mirrored for the other way)
+art_src/npc_girl.png    ->                       the villagers the game's other
+art_src/npc_boy.png     ->                       sprite definitions describe
 ```
 
 The tileset is deliberately **sparse**: the map names a tileset, and for each

@@ -30,6 +30,11 @@ ts:           .skip 16                    # timespec {0, 20ms set per frame}
 has_tty:      .quad 0
 .globl g_headless
 g_headless:   .quad 0
+# gfx frames: instead of ANSI escape codes the frame goes out as one binary
+# block -- "PKF1", the map, the player, then two bytes per cell (glyph and
+# (bg<<4)|fg).  The window front-end reads that; no terminal is involved.
+.globl g_gfx
+g_gfx:        .quad 0
 .globl g_fast
 g_fast:       .byte 0
 g_script:     .quad 0                     # scripted-input cursor
@@ -1086,12 +1091,106 @@ g_dot:   .asciz "\xc2\xb7"
 
 .section .text
 
+# ------------------------------------------------------------ gfx flip ------
+# gfx_flip: paint fb -> one native frame on stdout, for the window build.
+#
+#   4   "PKF1"
+#   1   map, 1 x, 1 y, 1 direction
+#   1   the player's screen column, 1 his row (0xff when off screen)
+#   3840 cells: the glyph, then (bg<<4)|fg
+#
+# Half blocks are three bytes of UTF-8 in a cell, because that is what a
+# terminal wants; a window would rather have the glyph number it matches tiles
+# with, so fold 0xE2 0x96 xx back down to 1 (full), 2 (upper), 3 (lower), and
+# swallow the middle dot the same way the ANSI writer leaves it blank.
+gfx_flip:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    lea r15, [rip+outbuf]
+    mov dword ptr [r15], 0x31464b50      # "PKF1"
+    movzx eax, byte ptr [rip+p_map]
+    mov byte ptr [r15+4], al
+    movzx eax, byte ptr [rip+p_x]
+    mov byte ptr [r15+5], al
+    movzx eax, byte ptr [rip+p_y]
+    mov byte ptr [r15+6], al
+    movzx eax, byte ptr [rip+p_dir]
+    mov byte ptr [r15+7], al
+    movzx eax, byte ptr [rip+p_scr_x]
+    mov byte ptr [r15+8], al
+    movzx eax, byte ptr [rip+p_scr_y]
+    mov byte ptr [r15+9], al
+    mov ebp, 10                          # write index
+    xor r12d, r12d                       # row
+.Lgf_row:
+    xor r13d, r13d                       # column
+.Lgf_col:
+    mov eax, r12d
+    imul eax, eax, SCR_W
+    add eax, r13d
+    mov r14d, eax                        # cell index
+    shl eax, 2
+    lea rcx, [rip+fb_cells]
+    add rcx, rax
+    movzx edx, byte ptr [rcx]            # the glyph, first byte
+    cmp dl, 0xe2
+    jne .Lgf_notblk
+    movzx eax, byte ptr [rcx+1]
+    cmp al, 0x96                         # U+2588 full, U+2580 upper, U+2584 lower
+    jne .Lgf_notblk
+    movzx eax, byte ptr [rcx+2]
+    mov edx, 1
+    cmp eax, 0x88
+    je .Lgf_emit
+    mov edx, 2
+    cmp eax, 0x80
+    je .Lgf_emit
+    mov edx, 3
+    cmp eax, 0x84
+    je .Lgf_emit
+    xor edx, edx
+    jmp .Lgf_emit
+.Lgf_notblk:
+    cmp dl, 0xc2                         # a middle dot: nothing to draw
+    jne .Lgf_emit
+    xor edx, edx
+.Lgf_emit:
+    lea rcx, [rip+fb_attr]
+    movzx eax, byte ptr [rcx+r14]
+    mov byte ptr [r15+rbp], dl
+    mov byte ptr [r15+rbp+1], al
+    add rbp, 2
+    inc r13d
+    cmp r13d, SCR_W
+    jb .Lgf_col
+    inc r12d
+    cmp r12d, SCR_H
+    jb .Lgf_row
+    mov eax, SYS_WRITE
+    mov edi, 1
+    lea rsi, [rip+outbuf]
+    mov edx, ebp
+    syscall
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+
 # ---------------------------------------------------------------- flip ------
 # flip: paint fb -> terminal (single write)
 .globl flip
 flip:
     cmp qword ptr [rip+g_headless], 0
     jne .Lflip_ret
+    cmp qword ptr [rip+g_gfx], 0
+    jne gfx_flip
     push rbx
     push rbp
     push r12

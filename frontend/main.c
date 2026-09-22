@@ -49,10 +49,28 @@
 #define CREATURE_PX 160
 #define MAX_TILES 64
 #define MAX_SPECIES 32
+#define MAX_WALKERS 8
+#define WALKER_W TILE_PX                 /* a person is one map tile wide ... */
+#define WALKER_H 40                      /* ... and stands a little taller */
 #define N_PICTURES 3                     /* title, field, city */
 
 static const char *root = ".";
 static const char *game_path = "./pokemon";
+
+static void trace(const char *tag)
+{
+    static int fd = -1;
+    if (fd == -1) {
+        const char *path = getenv("POKEGUI_TRACE");
+        if (!path)
+            return;
+        fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (fd < 0)
+            return;
+    }
+    (void)!write(fd, tag, strlen(tag));
+    (void)!write(fd, "\n", 1);
+}
 
 static void die(const char *what)
 {
@@ -80,6 +98,18 @@ static Tile tiles[2][MAX_TILES];
 static int tiles_per_set;
 static Species species[MAX_SPECIES];
 static int n_species;
+
+/* A person on the map.  The game draws people as a 2x2 block of characters --
+   a hat, a body, legs -- which this replaces with a sprite.  The player has
+   one picture per direction; the villagers have a single front view. */
+typedef struct {
+    Uint8 glyphs[4];
+    Uint8 attrs[4];
+    int n_frames;
+    const Uint8 *frames[4];
+} Walker;
+static Walker walkers[MAX_WALKERS];
+static int n_walkers;
 static const Uint8 *pictures[N_PICTURES];
 static Uint8 *assets;
 
@@ -150,9 +180,25 @@ static void load_assets(const char *path)
         species[i].px = p;
         p += SPECIES_PX * SPECIES_PX;
     }
+
     for (i = 0; i < N_PICTURES; i++) {
         pictures[i] = p;
         p += SCR_PW * SCR_PH;
+    }
+    /* people: the block of glyphs to recognise, then the pictures */
+    n_walkers = (int)rd32(&p);
+    if (n_walkers > MAX_WALKERS)
+        die("assets holds more people than this build");
+    for (i = 0; i < n_walkers; i++) {
+        for (k = 0; k < 4; k++)
+            walkers[i].glyphs[k] = *p++;
+        for (k = 0; k < 4; k++)
+            walkers[i].attrs[k] = *p++;
+        walkers[i].n_frames = *p++;
+        for (k = 0; k < walkers[i].n_frames && k < 4; k++) {
+            walkers[i].frames[k] = p;
+            p += WALKER_W * WALKER_H;
+        }
     }
     if (p > assets + len)
         die("assets ends early");
@@ -163,6 +209,9 @@ typedef struct {
     Uint8 glyph;                     /* 0 blank, 1 full block, 2 upper, 3 lower */
     Uint8 fg, bg;
 } Cell;
+
+static int cur_map = -1, cur_px = 0, cur_py = 0, cur_pdir = 0;
+static int cur_scr_x = 0xff, cur_scr_y = 0xff;
 
 static Cell grid[SCR_H][SCR_W];          /* the frame being shown */
 static Cell next_grid[SCR_H][SCR_W];     /* the frame being painted */
@@ -501,6 +550,80 @@ static int screen_picture(void)
     return -1;
 }
 
+/* Which walker's block of glyphs is this?  -1 for none. */
+static int walker_at(int vx, int vy)
+{
+    const Cell *c[4];
+    int i, w;
+    c[0] = &grid[1 + vy * 2][vx * 2];
+    c[1] = &grid[1 + vy * 2][vx * 2 + 1];
+    c[2] = &grid[2 + vy * 2][vx * 2];
+    c[3] = &grid[2 + vy * 2][vx * 2 + 1];
+    for (w = 0; w < n_walkers; w++) {
+        for (i = 0; i < 4; i++)
+            if (c[i]->glyph != walkers[w].glyphs[i])
+                break;
+        if (i == 4)
+            return w;
+    }
+    return -1;
+}
+
+/* the four cells of a block, so the character layer leaves them alone */
+static void cover_block(int vx, int vy, int exact)
+{
+    int x, y;
+    for (y = 0; y < 2; y++)
+        for (x = 0; x < 2; x++) {
+            int gy = 1 + vy * 2 + y, gx = vx * 2 + x;
+            const Cell *c = &grid[gy][gx];
+            covered[gy][gx] = (Uint8)exact;
+            cover_word[gy][gx] = (Uint32)c->glyph |
+                                 ((Uint32)c->fg << 16) |
+                                 ((Uint32)c->bg << 24);
+        }
+}
+
+/* the player's four directions in p_dir order: 0 up, 1 down, 2 left, 3 right;
+   the packed frames go down, up, left, right */
+static const int dir_frame[4] = { 1, 0, 2, 3 };
+
+/* People are drawn one tile wide and a little taller, so their heads reach
+   into the block above; the characters of that block must then not be drawn
+   over them. */
+static void put_walker(int w, int vx, int vy, int frame)
+{
+    int px = vx * 2 * CELL_W;
+    int py = (1 + vy * 2) * CELL_H + TILE_PX - WALKER_H;
+    if (w < 0 || w >= n_walkers || frame >= walkers[w].n_frames)
+        return;
+    blit_indexed(walkers[w].frames[frame], WALKER_W, WALKER_H, px, py,
+                 WALKER_W, WALKER_H);
+    if (vy >= 1 && covered[1 + (vy - 1) * 2][vx * 2])
+        cover_block(vx, vy - 1, 1);              /* his head is in there */
+    cover_block(vx, vy, 1);
+}
+
+static void draw_walker(int vx, int vy)
+{
+    put_walker(walker_at(vx, vy), vx, vy, 0);
+}
+
+static void draw_player(void)
+{
+    int f = dir_frame[cur_pdir & 3];
+    int vx, vy;
+    if (cur_scr_x % 2 || (cur_scr_y % 2) == 0)
+        return;                                   /* not a whole block: skip */
+    vx = cur_scr_x / 2;
+    vy = (cur_scr_y - 1) / 2;
+    if (vy < 0 || vy >= 8)
+        return;
+    if (walkers[0].n_frames <= f)
+        f = 0;
+    put_walker(0, vx, vy, f);
+}
+
 static void render(void)
 {
     int x, y, vx, vy, pic = screen_picture();
@@ -511,6 +634,10 @@ static void render(void)
     memset(frame, 0, sizeof(frame));
     memset(covered, 0, sizeof(covered));
 
+    if (getenv("POKEGUI_DEBUG"))
+        fprintf(stderr, "render: pic=%d blocks=%d art=%d people=%d map=%d scr=%d,%d\n",
+                pic, count_blocks(), art_mode, n_walkers, cur_map, cur_scr_x,
+                cur_scr_y);
     if (pic >= 0)
         blit_indexed(pictures[pic], SCR_PW, SCR_PH, 0, 0, SCR_PW, SCR_PH);
 
@@ -543,9 +670,16 @@ static void render(void)
                             tiles[setno][t].words[y * 2 + x];
                     }
                 }
+                /* a person standing here?  Their sprite goes over the ground
+                   and the four characters underneath are not drawn. */
+                draw_walker(vx, vy);
             }
         }
     }
+
+    /* ---- the player, from where the frame header says he is ---- */
+    if (!art_mode && cur_scr_x != 0xff && cur_scr_y != 0xff && n_walkers)
+        draw_player();
 
     /* ---- creatures, under the interface but over the backdrop ---- */
     if (battle) {
@@ -662,10 +796,78 @@ static void save_bmp(const char *path)
     printf("wrote %s (%dx%d)\n", path, w, h);
 }
 
+/* --------------------------------------------------------------- effects -- */
+/* What is on screen right now, so the last frame can be shown again while a
+   new one is being wiped in. */
+static Uint32 shown[SCR_PW * SCR_PH];
+static Uint32 was[SCR_PW * SCR_PH];               /* the screen being left */
+static Uint32 next_screen[SCR_PW * SCR_PH];       /* the screen arriving */
+static int trans_step = -1, trans_pic = -2;
+#define TRANS_STEPS 18
+#define TRANS_FLASH 3
+static Uint8 trans_col[SCR_W / 2];
+
+static Uint32 mix(Uint32 a, Uint32 b, int num, int den)
+{
+    int i;
+    Uint32 out = 0;
+    for (i = 0; i < 3; i++) {
+        int ca = (int)((a >> (i * 8)) & 0xff), cb = (int)((b >> (i * 8)) & 0xff);
+        int v = ca + (cb - ca) * num / den;
+        out |= (Uint32)(v & 0xff) << (i * 8);
+    }
+    return out | 0xff000000u;
+}
+
+/* A wild POKeMON jumps out: flash white, then the new screen wipes in one
+   tile column at a time, in an order that is fixed but looks arbitrary. */
+static void trans_begin(int new_pic, int old_pic)
+{
+    int i, x;
+    (void)old_pic;
+    memcpy(was, shown, sizeof(was));
+    for (x = 0; x < SCR_W / 2; x++) {
+        i = (x * 37 + 11) % 15;                  /* 0 first, 14 last */
+        trans_col[x] = (Uint8)i;
+    }
+    trans_pic = new_pic;
+    trans_step = 0;
+}
+
+static void trans_apply(void)
+{
+    int step = trans_step, x, y, k;
+    if (step < TRANS_FLASH) {                    /* first the white flash */
+        int amt = 255 - step * 90;
+        size_t i;
+        for (i = 0; i < (size_t)SCR_PW * SCR_PH; i++)
+            frame[i] = mix(next_screen[i], 0xffffffffu, amt, 255);
+        return;
+    }
+    for (x = 0; x < SCR_W; x++) {
+        int col = x / 2;
+        const Uint32 *src = (trans_col[col] <= step - TRANS_FLASH)
+                                ? next_screen : was;
+        for (y = 0; y < SCR_PH; y++) {
+            size_t idx = (size_t)y * SCR_PW + x * CELL_W;
+            for (k = 0; k < CELL_W; k++)
+                frame[idx + k] = src[idx + k];
+        }
+    }
+}
+
 /* ------------------------------------------------------------- the game --- */
 static pid_t child;
-static int master_fd = -1, child_alive = 1;
+static int master_fd = -1, child_alive = 1, child_out = -1;
+static int use_pty = 0;                   /* --pty: the old terminal path */
 
+/* The game can talk two ways.  In a terminal (or with --pty) it draws itself
+   with ANSI escape codes and this program reassembles the grid.  With --gfx it
+   hands over the raw grid -- "PKF1", the map and the player position, then a
+   glyph and a colour per cell -- so no escape codes are involved at all and
+   the frame arrives ready to blit.  Keys always go the same way: through a
+   pty, so that the game's termios dance finds a tty and its non-blocking read
+   keeps working.  Only the output differs. */
 static void spawn_game(int quickstart)
 {
     struct winsize ws;
@@ -674,39 +876,166 @@ static void spawn_game(int quickstart)
     /* a checkout out of an archive or a snapshot can have 0644 on the game */
     if (access(game_path, X_OK) != 0)
         chmod(game_path, 0755);
-    pid = forkpty(&master_fd, NULL, NULL, NULL);
-    if (pid < 0)
-        die("forkpty failed");
-    if (pid == 0) {
-        if (chdir(root) != 0)
-            _exit(1);
-        if (quickstart) {
-            char *av[4];
-            av[0] = (char *)game_path;
-            av[1] = (char *)"--fast";
-            av[2] = (char *)"--quickstart";
-            av[3] = NULL;
-            execv(game_path, av);
-        } else {
-            char *av[3];
-            av[0] = (char *)game_path;
-            av[1] = (char *)"--fast";
-            av[2] = NULL;
-            execv(game_path, av);
+
+    if (use_pty) {
+        pid = forkpty(&master_fd, NULL, NULL, NULL);
+        if (pid < 0)
+            die("forkpty failed");
+        child_out = master_fd;
+        if (pid == 0) {
+            if (chdir(root) != 0)
+                _exit(1);
+            if (quickstart) {
+                char *av[4];
+                av[0] = (char *)game_path;
+                av[1] = (char *)"--fast";
+                av[2] = (char *)"--quickstart";
+                av[3] = NULL;
+                execv(game_path, av);
+            } else {
+                char *av[3];
+                av[0] = (char *)game_path;
+                av[1] = (char *)"--fast";
+                av[2] = NULL;
+                execv(game_path, av);
+            }
+            _exit(127);
         }
-        _exit(127);
+        child = pid;
+        ws.ws_row = SCR_H;
+        ws.ws_col = SCR_W;
+        ws.ws_xpixel = ws.ws_ypixel = 0;
+        ioctl(master_fd, TIOCSWINSZ, &ws);
+        fcntl(master_fd, F_SETFL, O_NONBLOCK);
+        return;
     }
-    child = pid;
-    ws.ws_row = SCR_H;
-    ws.ws_col = SCR_W;
-    ws.ws_xpixel = ws.ws_ypixel = 0;
-    ioctl(master_fd, TIOCSWINSZ, &ws);
-    fcntl(master_fd, F_SETFL, O_NONBLOCK);
+
+    {
+        int outp[2];
+        char *slave_name;
+        int slave;
+        if (pipe(outp) != 0)
+            die("pipe failed");
+        master_fd = posix_openpt(O_RDWR | O_NOCTTY);
+        if (master_fd < 0 || grantpt(master_fd) != 0 ||
+            unlockpt(master_fd) != 0) {
+            use_pty = 1;
+            trace("sdl");
+        spawn_game(quickstart);
+        trace("spawned");              /* no pts support: fall back */
+            return;
+        }
+        slave_name = ptsname(master_fd);
+        slave = open(slave_name, O_RDWR | O_NOCTTY);
+        pid = fork();
+        if (pid < 0)
+            die("fork failed");
+        if (pid == 0) {
+            close(master_fd);
+            close(outp[0]);
+            dup2(slave, 0);
+            dup2(outp[1], 1);              /* frames, untouched by any tty */
+            if (slave > 2)
+                close(slave);
+            close(outp[1]);
+            if (chdir(root) != 0)
+                _exit(1);
+            {
+                char *av[4];
+                int n = 0;
+                av[n++] = (char *)game_path;
+                av[n++] = (char *)"--gfx";
+                if (quickstart)
+                    av[n++] = (char *)"--quickstart";
+                av[n++] = NULL;
+                execv(game_path, av);
+            }
+            _exit(127);
+        }
+        close(slave);
+        close(outp[1]);
+        child = pid;                 /* without this, the kill below is kill(0) */
+        child_out = outp[0];
+        ws.ws_row = SCR_H;
+        ws.ws_col = SCR_W;
+        ws.ws_xpixel = ws.ws_ypixel = 0;
+        ioctl(master_fd, TIOCSWINSZ, &ws);
+        fcntl(master_fd, F_SETFL, O_NONBLOCK);
+        fcntl(child_out, F_SETFL, O_NONBLOCK);
+    }
+}
+
+/* ------------------------------------------------------- native frame pipe -- */
+#define FRAME_BYTES (10 + 2 * SCR_W * SCR_H)
+static Uint8 nbuf[1 << 20];
+static size_t nlen;
+
+static void native_frame(const Uint8 *f)
+{
+    int r, c;
+    cur_map = f[4];
+    cur_px = f[5];
+    cur_py = f[6];
+    cur_pdir = f[7];
+    cur_scr_x = f[8];
+    cur_scr_y = f[9];
+    for (r = 0; r < SCR_H; r++)
+        for (c = 0; c < SCR_W; c++) {
+            const Uint8 *cell = f + 10 + 2 * (r * SCR_W + c);
+            next_grid[r][c].glyph = cell[0];
+            next_grid[r][c].bg = (Uint8)(cell[1] >> 4);
+            next_grid[r][c].fg = (Uint8)(cell[1] & 0x0f);
+        }
+    frame_boundary();
+    dirty = 1;
+}
+
+static void pump_native(void)
+{
+    size_t off = 0;
+    for (;;) {
+        ssize_t n;
+        if (nlen == sizeof(nbuf)) {                  /* paranoia */
+            memmove(nbuf, nbuf + nlen - 3, 3);
+            nlen = 3;
+        }
+        n = read(child_out, nbuf + nlen, sizeof(nbuf) - nlen);
+        if (n > 0) {
+            nlen += (size_t)n;
+            continue;
+        }
+        if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK))
+            child_alive = 0;
+        break;
+    }
+    for (;;) {
+        size_t p = off;
+        while (p + 4 <= nlen && memcmp(nbuf + p, "PKF1", 4) != 0)
+            p++;
+        if (p + 4 > nlen) {
+            off = (nlen > 3) ? nlen - 3 : 0;         /* keep a split magic */
+            break;
+        }
+        if (p + FRAME_BYTES > nlen) {
+            off = p;                                 /* wait for the rest */
+            break;
+        }
+        native_frame(nbuf + p);
+        off = p + FRAME_BYTES;
+    }
+    if (off) {
+        memmove(nbuf, nbuf + off, nlen - off);
+        nlen -= off;
+    }
 }
 
 static void pump_game(void)
 {
     Uint8 buf[1 << 16];
+    if (!use_pty) {
+        pump_native();
+        return;
+    }
     for (;;) {
         ssize_t n = read(master_fd, buf, sizeof(buf));
         ssize_t i;
@@ -726,6 +1055,14 @@ static void send_key(const char *s)
 {
     if (master_fd >= 0 && child_alive && s && *s)
         (void)!write(master_fd, s, strlen(s));
+}
+
+static void shut_game(void)
+{
+    if (master_fd >= 0)
+        close(master_fd);
+    if (!use_pty && child_out >= 0)
+        close(child_out);
 }
 
 static const char *key_bytes(SDL_Keycode k)
@@ -780,6 +1117,7 @@ int main(int argc, char **argv)
 {
     const char *shot = NULL, *scenario = NULL, *keys = NULL;
     int scale = 1, quickstart = 1, headless = 0, i;
+    long settle = 6000, tail_ms = 2500;
     char asset_path[512];
 
     for (i = 1; i < argc; i++) {
@@ -796,9 +1134,17 @@ int main(int argc, char **argv)
             scale = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--no-quickstart"))
             quickstart = 0;
+        else if (!strcmp(argv[i], "--settle") && i + 1 < argc)
+            settle = atol(argv[++i]);      /* ms on screen before any keys */
+        else if (!strcmp(argv[i], "--tail") && i + 1 < argc)
+            tail_ms = atol(argv[++i]);     /* ms after the last key */
+        else if (!strcmp(argv[i], "--pty"))
+            use_pty = 1;                 /* keep the terminal front-end */
         else if (!strcmp(argv[i], "--help")) {
             printf("usage: pokemon-gui [--scale N] [--game PATH] [--keys KEYS]\n"
-                   "                   [--scenario NAME] [--shot FILE.bmp]\n");
+                   "                   [--scenario NAME] [--shot FILE.bmp]\n"
+                   "                   [--pty]   draw a terminal instead of\n"
+                   "                             the native frame stream\n");
             return 0;
         }
     }
@@ -816,7 +1162,45 @@ int main(int argc, char **argv)
     if (headless)
         setenv("SDL_VIDEODRIVER", "dummy", 0);
     load_assets(asset_path);
+    if (getenv("POKEGUI_DEBUG"))
+        fprintf(stderr, "assets: %d tiles/set, %d species, %d people\n",
+                tiles_per_set, n_species, n_walkers);
 
+    if (getenv("POKEGUI_TESTTRANS")) {
+        /* paint a stand-in for two screens and run the wipe over them, so the
+           effect can be looked at without a display */
+        int i2, x, y;
+        for (y = 0; y < SCR_PH; y++)
+            for (x = 0; x < SCR_PW; x++)
+                shown[(size_t)y * SCR_PW + x] =
+                    ((x / 32 + y / 32) & 1) ? 0xff2a6a20u : 0xff104010u;
+        for (y = 0; y < SCR_PH; y++)
+            for (x = 0; x < SCR_PW; x++)
+                frame[(size_t)y * SCR_PW + x] =
+                    ((x / 48 + y / 24) & 1) ? 0xffd0d0f0u : 0xff202060u;
+        trans_begin(0, -1);
+        memcpy(next_screen, frame, sizeof(next_screen));
+        for (i2 = 0; i2 < 8; i2++) {
+            char name[64];
+            trans_step = i2;
+            trans_apply();
+            snprintf(name, sizeof(name), "trans_%02d.bmp", i2);
+            save_bmp(name);
+        }
+        return 0;
+    }
+    if (getenv("POKEGUI_TESTWALKER")) {
+        int i2, w2, f2;
+        for (i2 = 0; i2 < SCR_PW * SCR_PH; i2++)
+            frame[i2] = 0xff20a020u;                  /* a solid green field */
+        for (w2 = 0; w2 < n_walkers; w2++)
+            for (f2 = 0; f2 < walkers[w2].n_frames; f2++)
+                blit_indexed(walkers[w2].frames[f2], WALKER_W, WALKER_H,
+                             8 + f2 * 40 + w2 * 200, 40 + w2 * 90,
+                             WALKER_W * 3, WALKER_H * 3);
+        save_bmp("walker_test.bmp");
+        return 0;
+    }
     if (getenv("POKEGUI_TESTCREATURE")) {
         int i2;
         for (i2 = 0; i2 < SCR_PW * SCR_PH; i2++)
@@ -829,6 +1213,7 @@ int main(int argc, char **argv)
         save_bmp("creature_test.bmp");
         return 0;
     }
+    trace("assets");
     if (SDL_Init(SDL_INIT_VIDEO) != 0)
         die(SDL_GetError());
     {
@@ -896,7 +1281,8 @@ int main(int argc, char **argv)
                 fprintf(stderr, "script: %d keys, first 40: %.40s\n", (int)slen,
                         script);
             /* settle, then type the script, then settle again */
-            while (t < 40000) {
+            while (t < settle + 34000) {
+                trace("tick");
                 pump_game();
                 if (k < slen) {
                     send_key(script_key(script[k]));
@@ -904,7 +1290,7 @@ int main(int argc, char **argv)
                 }
                 nap_ms(30);
                 t += 30;
-                if (k >= slen && t > (slen ? 2500 : 6000))
+                if (k >= slen && t > (slen ? tail_ms : settle))
                     break;
                 if (!child_alive)
                     break;
@@ -912,9 +1298,14 @@ int main(int argc, char **argv)
             if (getenv("POKEGUI_DEBUG"))
                 fprintf(stderr, "loop end: sent %d/%d keys, t=%ld, alive=%d\n",
                         (int)k, (int)slen, t, child_alive);
+            trace("loop done");
             render();
+            trace("rendered");
             if (getenv("POKEGUI_DEBUG")) {
                 int r, c2;
+                fprintf(stderr, "at dump: count_blocks=%d pic=%d sample=%d,%d,%d\n",
+                        count_blocks(), screen_picture(),
+                        grid[5][5].glyph, grid[12][10].glyph, grid[20][1].glyph);
                 for (r = 12; r < 24; r++) {
                     fprintf(stderr, "%2d |", r);
                     for (c2 = 0; c2 < SCR_W; c2++) {
@@ -925,6 +1316,7 @@ int main(int argc, char **argv)
                 }
             }
             save_bmp(shot);
+            trace("saved");
         } else {
             int running = 1;
             while (running) {
@@ -941,11 +1333,23 @@ int main(int argc, char **argv)
                 }
                 pump_game();
                 if (dirty) {
+                    int pic = screen_picture();
+                    if (pic != trans_pic) {
+                        trans_begin(pic, trans_pic);
+                        dirty = 1;
+                    }
                     render();
+                    if (trans_step >= 0 && trans_step < TRANS_STEPS) {
+                        if (trans_step == 0)
+                            memcpy(next_screen, frame, sizeof(next_screen));
+                        trans_apply();
+                        trans_step++;
+                    }
                     SDL_UpdateTexture(tex, NULL, frame, SCR_PW * 4);
                     SDL_RenderClear(ren);
                     SDL_RenderCopy(ren, tex, NULL, NULL);
                     SDL_RenderPresent(ren);
+                    memcpy(shown, frame, sizeof(shown));
                     dirty = 0;
                 }
                 nap_ms(16);
@@ -961,6 +1365,8 @@ int main(int argc, char **argv)
             nap_ms(60);
             kill(child, SIGKILL);
         }
+        shut_game();
+        trace("shut");
         {
             int status = 0;
             waitpid(child, &status, 0);
@@ -970,6 +1376,7 @@ int main(int argc, char **argv)
                         WEXITSTATUS(status), game_path);
         }
     }
+    trace("quit");
     SDL_Quit();
     return 0;
 }
