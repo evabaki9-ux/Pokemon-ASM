@@ -51,6 +51,10 @@ def run(binary, chars, cols=80, rows=24, timeout=60.0, extra=None):
     if pid == 0:                                    # child: the game
         os.chdir(ROOT)
         try:
+            # a copy out of an archive or a snapshot can be 0644: exec needs
+            # the bit, so put it back instead of dying with EACCES
+            if not os.access(binary, os.X_OK):
+                os.chmod(binary, 0o755)
             os.execv(binary, [binary] + list(extra or []))
         except Exception as e:
             os.write(2, ("exec failed: %s\n" % e).encode())

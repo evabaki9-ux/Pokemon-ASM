@@ -37,11 +37,19 @@ KEYMAP = {"u": "w", "d": "s", "l": "a", "r": "d", "a": "z", "b": "x",
           "s": "\r", "q": "q", ".": ""}
 
 
+
+def _run_binary(path):
+    """Same guard as ptyplay: a snapshot can strip the execute bit."""
+    import os
+    if not os.access(path, os.X_OK):
+        os.chmod(path, 0o755)
+    return path
+
 def capture(keys, gap=0.05, extra=("--fast",), cols=80, rows=24, settle=0.6):
     pid, fd = pty.fork()
     if pid == 0:
         os.chdir(ROOT)
-        os.execv(os.path.join(ROOT, "pokemon"), ["pokemon"] + list(extra))
+        os.execv(_run_binary(os.path.join(ROOT, "pokemon")), ["pokemon"] + list(extra))
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
     time.sleep(0.4)
     out = bytearray()

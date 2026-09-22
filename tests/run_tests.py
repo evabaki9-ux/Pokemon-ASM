@@ -19,6 +19,14 @@ import shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIN = os.path.join(ROOT, "pokemon")
+
+
+def ensure_exec(path):
+    """A checkout that arrived from an archive or a workspace snapshot can
+    have 0644 on the binary; exec needs the bit, so put it back."""
+    if os.path.exists(path) and not os.access(path, os.X_OK):
+        os.chmod(path, 0o755)
+    return path
 SAVE = os.path.join(ROOT, "pokemon.sav")
 TMP = os.path.join(ROOT, "build", "test")
 sys.path.insert(0, os.path.join(ROOT, "tests"))
@@ -38,6 +46,16 @@ class Case:
         self.want_absent = list(want_absent)  # regexes that must not match
         self.want_save = want_save          # True: file must exist, False: must not
         self.setup = setup                 # callable run before the binary
+
+
+
+def _run_binary(path):
+    """exec needs the bit, and a copy out of an archive or a workspace
+    snapshot can arrive as 0644 -- put it back rather than fail."""
+    import os
+    if not os.access(path, os.X_OK):
+        os.chmod(path, 0o755)
+    return path
 
 
 def parse_frames(text):
@@ -61,7 +79,7 @@ def run_case(case, verbose=False):
               else play.scenario(case.name))
     dump = os.path.join(TMP, case.name + ".txt")
     err = os.path.join(TMP, case.name + ".err")
-    args = [BIN, "--headless", "--fast", "--fixed-rng"]
+    args = [ensure_exec(BIN), "--headless", "--fast", "--fixed-rng"]
     if case.quick:
         args.append("--quickstart")
     args += ["--script", script, "--dump", dump]
@@ -107,7 +125,7 @@ def make_save():
     script = (play.wait(10)
               + play.tap("s") + play.step("d", 4) + play.tap("a")
               + play.wait(play.PAGE) + play.wait(30))
-    subprocess.call([BIN, "--headless", "--fast", "--quickstart",
+    subprocess.call([ensure_exec(BIN), "--headless", "--fast", "--quickstart",
                      "--script", script, "--dump", os.path.join(TMP, "mk.txt")],
                     cwd=ROOT, stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL, timeout=120)
